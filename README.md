@@ -47,18 +47,6 @@
    - Develop a pipeline for real-time offside detection during live matches.
 
 
-## **Short-Term Work Plan** ⏳
-
-1. **Phase 1**:
-   - [ ] Fine-tune YOLOv11 for player detection.
-   - [ ] Implement color histogram analysis for team differentiation.
-   - [ ] Develop K-Means clustering for team visualization.
-   - [ ] Perform bounding box dimension and position analysis.
-
-2. **Phase 2**:
-   - [ ] Implement ball tracking.
-   - [ ] Extract detailed player statistics.
-
 ---
 
 ## **Tech Stack** 🛠️
@@ -67,7 +55,6 @@
 - **Color Analysis**: OpenCV for histogram extraction.
 - **Clustering**: K-Means for spatial team analysis.
 - **Tracking**: DeepSORT or ByteTrack for ball tracking.
-- **Time-Series Models**: LSTM or Transformers.
 - **Uncertainty Quantification**: Punch library for conformal prediction.
 
 ---
@@ -76,15 +63,10 @@
 
 ### **Clone the Project**
 ```bash
-git clone https://github.com/alyasltd/football_pred.git
+git clone https://github.com/alyasltd/FootCVision2.git
 ```
 
 ### **Install Dependencies**
 ```bash
 pip install -r requirements.txt
 ```
-
----
-
-### **Conclusion**
-This project is still in the early stages, with exciting features planned for the coming months. Feel free to contribute or reach out for collaboration! 😊
