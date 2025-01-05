@@ -8,17 +8,7 @@
    - Adapt YOLOv11 for detecting football players on the field.
    - **Objective**: Ensure robust detection of players, even under challenging scenarios like crowded scenes or varying lighting conditions.
 
-2. **Two Approaches for Team Differentiation** 📊
-   - **Color Histograms for Team Identification**:
-     - Extract **color histograms** from bounding box regions of detected players.
-     - Cluster players into teams based on dominant uniform colors.
-     - **Objective**: Provide a visually interpretable method for distinguishing teams based on color features.
-
-   - **K-Means Clustering for Team Analysis**:
-     - Use player positions (bounding box coordinates) and spatial distributions to cluster players into two teams.
-     - **Objective**: Offer a complementary approach to visualizing teams, focusing on spatial and positional analysis.
-
-3. **Conformal Object Detection with puncc library** 📏
+2. **Conformal Object Detection with puncc library** 📏
  
 ---
 
@@ -36,7 +26,18 @@
 
 ---
 
-### **Phase 3: Offside Detection** 🚩
+### **Phase 3: **Two Approaches for Team Differentiation** 📊
+   - **Color Histograms for Team Identification**:
+     - Extract **color histograms** from bounding box regions of detected players.
+     - Cluster players into teams based on dominant uniform colors.
+     - **Objective**: Provide a visually interpretable method for distinguishing teams based on color features.
+
+   - **K-Means Clustering for Team Analysis**:
+     - Use player positions (bounding box coordinates) and spatial distributions to cluster players into two teams.
+     - **Objective**: Offer a complementary approach to visualizing teams, focusing on spatial and positional analysis.
+---
+
+### **Phase 4: Offside Detection** 🚩
 
 1. **Rule-Based Offside Detection**
    - Utilize player positions and ball location to detect offside scenarios.
@@ -45,19 +46,6 @@
 2. **Real-Time Offside Detection**
    - Develop a pipeline for real-time offside detection during live matches.
 
----
-
-### **Phase 4: Goal Prediction Using Temporal Analysis** 🕒⚽
-
-1. **Time-Series Analysis** 📈
-   - Use player and ball trajectories to model temporal dependencies.
-   - Train models like **LSTM** or **Transformers** to predict the likelihood of a goal at a specific moment \( t \).
-
-2. **Conformal Prediction** 📊
-   - Follow an approach inspired by **Conformal Prediction Intervals for Remaining Useful Lifetime Estimation** to quantify uncertainty in predictions.
-   - Provide statistically valid prediction intervals for goal occurrence at time \( t \), ensuring high reliability.
-
----
 
 ## **Short-Term Work Plan** ⏳
 
