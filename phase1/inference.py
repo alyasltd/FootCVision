@@ -41,8 +41,22 @@ class PlayerInference:
                 result.save()
 
         return detections
+    
+    def extract_boxes(self, image_paths):
+        """
+        Extract all bounding boxes from a list of images.
+        Args:
+            image_paths (List[str]): Paths to input images.
+        Returns:
+            List[np.ndarray]: List of bounding boxes for each image.
+        """
+        results = self.model(image_paths, conf=self.conf_threshold, iou=self.iou_threshold)
+        all_boxes = []
+        for result in results:
+            boxes = result.boxes.xyxy.numpy()  # Extract bounding boxes (x1, y1, x2, y2)
+            all_boxes.append(boxes)
+        return all_boxes
 
-# Example Usage:
-player_inference = PlayerInference()
-detections = player_inference.detect("/Users/alyazouzou/Desktop/CV_Football/vids/inf.png", save_output=True)
-print(detections)
+#player_inference = PlayerInference()
+#detections = player_inference.detect("/Users/alyazouzou/Desktop/CV_Football/vids/inf.png", save_output=True)
+#print(detections)
