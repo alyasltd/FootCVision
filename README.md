@@ -1,4 +1,4 @@
-# ⚽️ Computer Vision Applied to Football
+# ⚽️ fOOTCVISION : Computer Vision Applied to Football
 
 ## **Roadmap** 🛣️
 
@@ -26,7 +26,7 @@
 
 ---
 
-### **Phase 3: **Two Approaches for Team Differentiation** 📊
+### **Phase 3: Two Approaches for Team Differentiation** 📊
    - **Color Histograms for Team Identification**:
      - Extract **color histograms** from bounding box regions of detected players.
      - Cluster players into teams based on dominant uniform colors.
