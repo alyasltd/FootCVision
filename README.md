@@ -1,4 +1,4 @@
-# ⚽️ fOOTCVISION : Computer Vision Applied to Football
+# ⚽️ FOOTCVISION : Computer Vision Applied to Football
 
 ## **Roadmap** 🛣️
 
