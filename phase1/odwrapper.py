@@ -21,7 +21,7 @@ class YOLOAPIWrapper:
         self.conf_threshold = conf_threshold
         self.iou_threshold = iou_threshold
 
-    def predict_from_image(self, image_path): #ok
+    def predict_from_image(self, image_path): 
         """
         Predict bounding boxes for a single image.
         Args:
@@ -31,8 +31,14 @@ class YOLOAPIWrapper:
         """
         results = self.model(image_path, conf=self.conf_threshold, iou=self.iou_threshold)
         boxes = []
+        
         for result in results:
             boxes.extend(result.boxes.xyxy.cpu().numpy())  # Ensure numpy format
+        
+        # Ensure the returned array has shape (0, 4) if no detections
+        if len(boxes) == 0:
+            return np.zeros((0, 4))
+        
         return np.array(boxes)
 
     def predict_and_match(self, image_path, y_trues_per_image, min_iou=0.1):
