@@ -2,7 +2,7 @@
 
 ## **Roadmap** 🛣️
 
-### **Phase 1: Player Detection and Initial Analysis** 🏃‍♂️⚽️
+### **Phase 1: Player Detection and Conformal Prediction** 🏃‍♂️⚽️
 
 1. **YOLOv11 Fine-Tuning for Player Detection** 🎯
    - Adapt YOLOv11 for detecting football players on the field.
