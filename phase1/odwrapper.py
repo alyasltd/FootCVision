@@ -124,7 +124,7 @@ class YOLOAPIWrapper:
             # Get matched classes
             #print(label)
             classes.append(list(compress(label, indices_i)))
-            print("cc")
+            #print("cc")
             #print(classes)
             # Stop if n_instances is reached
             if n_instances is not None and counter + 1 >= n_instances:
