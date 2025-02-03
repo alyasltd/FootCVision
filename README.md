@@ -16,10 +16,9 @@
 
 1. **Ball Tracking** ⚽
    - Implement tracking algorithms (e.g., **DeepSORT** or **ByteTrack**) to follow the ball's movement across frames.
-   - Extract trajectories to analyze key events like passes, shots, and goals.
 
 2. **Player Statistics** 📈
-   - Extract metrics for each player, such as:
+   - Extract metrics for each team, such as:
      - Distance covered.
      - Ball possession time.
      - Speed and acceleration.
@@ -27,7 +26,7 @@
 ---
 
 ### **Phase 3: Two Approaches for Team Differentiation** 📊
-   - **Color Histograms for Team Identification**:
+   - **HSV Classifier**:
      - Extract **color histograms** from bounding box regions of detected players.
      - Cluster players into teams based on dominant uniform colors.
      - **Objective**: Provide a visually interpretable method for distinguishing teams based on color features.
