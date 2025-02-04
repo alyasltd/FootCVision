@@ -4,6 +4,8 @@ import pandas as pd
 from collections import defaultdict
 from ultralytics import YOLO
 from scipy.interpolate import interp1d
+from scipy.interpolate import PchipInterpolator
+from scipy.interpolate import CubicSpline
 
 class PlayerTracker:
     def __init__(self, video_path, model_path="/Users/alyazouzou/Desktop/CV_Football/FootCVision/phase1/runs/detect/train/weights/best.pt"):
@@ -75,15 +77,21 @@ class PlayerTracker:
 
         ball_df = pd.DataFrame(self.ball_tracking_data)
         player_df = pd.DataFrame(self.player_tracking_data)
+        ball_df.to_csv('ball.csv')
+        player_df.to_csv('player.csv')
 
         ball_df_full = self._interpolate_and_fill(ball_df)
         player_df_full = self._interpolate_and_fill(player_df)
+        ball_df_full.to_csv('ball_full.csv')
+        player_df_full.to_csv('player_full.csv')   
 
         final_df = pd.concat([ball_df_full, player_df_full])
         final_df = final_df.sort_values(by=['frame', 'track_id']).reset_index(drop=True)
         final_df['track_id'] = final_df['track_id'].astype(int)
 
         return final_df
+
+
 
     def _interpolate_and_fill(self, df):
         """
@@ -120,6 +128,9 @@ class PlayerTracker:
                 df_full.loc[idx, 'track_id'] = df_full.loc[idx - 1, 'track_id'] + 1
 
         return df_full
+
+
+
     
     def plot_tracking(self, final_df):
         """
