@@ -77,15 +77,15 @@ class PlayerTracker:
 
         ball_df = pd.DataFrame(self.ball_tracking_data)
         player_df = pd.DataFrame(self.player_tracking_data)
-        ball_df.to_csv('ball.csv')
-        player_df.to_csv('player.csv')
+        #ball_df.to_csv('ball.csv')
+        #player_df.to_csv('player.csv')
 
-        ball_df_full = self._interpolate_and_fill(ball_df)
-        player_df_full = self._interpolate_and_fill(player_df)
-        ball_df_full.to_csv('ball_full.csv')
-        player_df_full.to_csv('player_full.csv')   
+        #ball_df_full = self._interpolate_and_fill(ball_df)
+        #player_df_full = self._interpolate_and_fill(player_df)
+        #ball_df_full.to_csv('ball_full.csv')
+        #player_df_full.to_csv('player_full.csv')   
 
-        final_df = pd.concat([ball_df_full, player_df_full])
+        final_df = pd.concat([ball_df, player_df])
         final_df = final_df.sort_values(by=['frame', 'track_id']).reset_index(drop=True)
         final_df['track_id'] = final_df['track_id'].astype(int)
 
