@@ -62,6 +62,16 @@ class PlayerTracker:
                         "w": float(w),
                         "h": float(h)
                     })
+                elif class_id == 1:  # "player" class
+                    self.player_tracking_data.append({
+                        "frame": frame_number,
+                        "track_id": track_id,
+                        "class": "goalkeeper",
+                        "x": float(x),
+                        "y": float(y),
+                        "w": float(w),
+                        "h": float(h)
+                    })
                 elif class_id == 2:  # "player" class
                     self.player_tracking_data.append({
                         "frame": frame_number,
@@ -174,8 +184,7 @@ class PlayerTracker:
                 y_max = int(y_center + box_height / 2)
 
                 # Choose a color for the bounding box
-                color = (0, 255, 0) if class_name == "ball" else (255, 0, 0)
-
+                color = (0, 255, 0) if class_name == "ball" else (255, 0, 0) if class_name == "goalkeeper" else (0, 0, 255)
                 # Draw the bounding box
                 cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), color, 2)
                 cv2.putText(frame, class_name, (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
