@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import pandas as pd
 import copy
+from tqdm.auto import tqdm 
 from typing import List
 
 class hsvclassifier:
@@ -14,6 +15,65 @@ class hsvclassifier:
             "man_united": [(17, 0, 138), (122, 113, 255)],
             "liverpool": [(18, 0, 136), (129, 116, 255)]
         }
+    
+    def get_crops_from_frames(self, target_frames):
+        """
+        Extract crops from multiple specified frames using tracking data.
+        
+        :param target_frames: List of frame numbers from which to extract crops.
+        :return: Dictionary {frame_number: list_of_crops} containing cropped player images.
+        """
+        cap = cv2.VideoCapture(self.video_path)
+        if not cap.isOpened():
+            print("Error: Could not open video.")
+            return {}
+
+        all_crops = {}
+
+        # Get video frame dimensions
+        ret, first_frame = cap.read()
+        if not ret:
+            print("Error: Could not read video.")
+            cap.release()
+            return {}
+
+        for frame_idx in tqdm(target_frames, desc="Extracting crops"):
+            frame_data = self.df_tracking[self.df_tracking["frame"] == frame_idx]
+            if frame_data.empty:
+                print(f"No tracking data found for frame {frame_idx}")
+                continue
+
+            # Set video to the target frame
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx - 1)
+            ret, frame = cap.read()
+            if not ret:
+                print(f"Error: Could not read frame {frame_idx}")
+                continue
+
+            crops = []
+            for _, row in frame_data.iterrows():
+                if row["class"] == "player":  # Only consider player crops
+                    x_center = row["x"]
+                    y_center = row["y"]
+                    box_width = row["w"]
+                    box_height = row["h"]
+
+                    # Calculate top-left and bottom-right coordinates of the bounding box
+                    x_min = int(x_center - box_width / 2)
+                    y_min = int(y_center - box_height / 2)
+                    x_max = int(x_center + box_width / 2)
+                    y_max = int(y_center + box_height / 2)
+
+                    # Ensure crop dimensions are valid
+                    if x_max > x_min and y_max > y_min:
+                        crop = frame[y_min:y_max, x_min:x_max]
+                        if crop.size > 0:  # Ensure crop is not empty
+                            crops.append(crop)
+
+            all_crops[frame_idx] = crops  # Store crops for the frame
+
+        cap.release()
+        return all_crops
 
     def get_hsv_img(self, img: np.ndarray) -> np.ndarray:
         """
@@ -39,19 +99,6 @@ class hsvclassifier:
 
     def crop_img_for_jersey(self, img: np.ndarray) -> np.ndarray:
         """
-        Crop the image to focus on the player's jersey area.
-        """
-        height, width, _ = img.shape
-
-        y_start = int(height * 0.15)
-        y_end = int(height * 0.50)
-        x_start = int(width * 0.15)
-        x_end = int(width * 0.85)
-
-        return img[y_start:y_end, x_start:x_end]
-    
-    def crop_img_for_jersey(self, img: np.ndarray, x: int, y: int, w: int, h: int) -> np.ndarray:
-        """
         Crop the image to focus on the player's jersey area based on the bounding box coordinates (x, y, w, h).
         
         Parameters:
@@ -64,8 +111,15 @@ class hsvclassifier:
         Returns:
         - Cropped image focusing on the jersey area of the player.
         """
-        return img[y:y+h, x:x+w]
+        height, width, _ = img.shape
 
+        y_start = int(height * 0.15)
+        y_end = int(height * 0.50)
+        x_start = int(width * 0.15)
+        x_end = int(width * 0.85)
+
+        return img[y_start:y_end, x_start:x_end]
+    
 
     def add_median_blur(self, img: np.ndarray) -> np.ndarray:
         """
@@ -73,12 +127,6 @@ class hsvclassifier:
         """
         return cv2.medianBlur(img, 5)
 
-    def non_black_pixels_count(self, img: np.ndarray) -> float:
-        """
-        Count the number of non-black pixels in the image.
-        """
-        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        return cv2.countNonZero(img_gray)
 
     def crop_filter_and_blur_img(self, img: np.ndarray, filter_range: tuple) -> np.ndarray:
         """
@@ -89,13 +137,6 @@ class hsvclassifier:
         transformed_img = self.add_median_blur(transformed_img)
         return transformed_img
 
-    def add_non_black_pixels_count_in_filter(self, img: np.ndarray, filter_range: tuple) -> dict:
-        """
-        Apply the filter to the image and count the non-black pixels.
-        """
-        transformed_img = self.crop_filter_and_blur_img(img, filter_range)
-        non_black_pixel_count = self.non_black_pixels_count(transformed_img)
-        return {"non_black_pixels_count": non_black_pixel_count}
 
     def predict_img(self, img: np.ndarray) -> str:
         """
@@ -116,39 +157,77 @@ class hsvclassifier:
 
         return predicted_team
 
-    def collect_and_classify(self, video_path, df_tracking):
+    def collect_and_classify(self) -> dict:
         """
-        Collect the bounding box coordinates from df_tracking and classify the team based on the color of the cropped image.
-        """
-        # Open the video file
-        cap = cv2.VideoCapture(video_path)
-        classified_data = []
+        Collects the bounding box coordinates from df_tracking, extracts and processes jersey crops,
+        applies filtering, blurring, and classifies each player's team.
 
-        while cap.isOpened():
+        Returns:
+            Dictionary with keys as `frame_number` and values as lists of processed crops.
+        """
+        cap = cv2.VideoCapture(self.video_path)
+        if not cap.isOpened():
+            print("Error: Could not open video.")
+            return {}
+
+        classified_crops = {}  # Dictionary to store classified crops per frame
+        classified_data = []  # Store classification results
+
+        for frame_number in tqdm(self.df_tracking["frame"].unique(), desc="Processing frames"):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number - 1)
             ret, frame = cap.read()
+
             if not ret:
-                break
+                print(f"Warning: Could not read frame {frame_number}")
+                continue
 
-            # For each row in df_tracking (assuming it has columns: 'frame', 'track_id', 'x', 'y', 'w', 'h')
-            for _, row in df_tracking[df_tracking['frame'] == int(cap.get(cv2.CAP_PROP_POS_FRAMES))].iterrows():
-                # Extract bounding box and crop the image
-                x, y, w, h = int(row['x']), int(row['y']), int(row['w']), int(row['h'])
-                cropped_image = self.crop_img_for_jersey(frame)
+            # Filter tracking data for the current frame
+            frame_data = self.df_tracking[self.df_tracking["frame"] == frame_number]
 
-                # Classify the team based on jersey color
-                team = self.predict_img(cropped_image)
+            crops = []  # Store processed crops for this frame
 
+            for _, row in frame_data.iterrows():
+                if row["class"] != "player":
+                    continue  # Ignore non-player objects
+
+                x, y, w, h = int(row["x"]), int(row["y"]), int(row["w"]), int(row["h"])
+
+                # Ensure bounding box is valid
+                if w <= 0 or h <= 0:
+                    continue
+
+                # Crop player's image
+                player_crop = frame[y:y+h, x:x+w]
+
+                # Crop only the jersey area
+                jersey_crop = self.crop_img_for_jersey(player_crop)
+
+                # Apply filter and blur
+                processed_crop = self.crop_filter_and_blur_img(jersey_crop, self.color_ranges["man_united"])  # Default filter
+                team = self.predict_img(jersey_crop)  # Predict team
+
+                # Store classified crop
+                crops.append(processed_crop)
+
+                # Append classification results
                 classified_data.append({
-                    "frame": row['frame'],
-                    "track_id": row['track_id'],
+                    "frame": frame_number,
+                    "track_id": row["track_id"],
                     "team": team,
-                    "class": row['class'],
-                    })
+                    "class": row["class"]
+                })
+
+            # Store crops for this frame
+            classified_crops[frame_number] = crops
 
         cap.release()
 
-        # Convert classified data into a DataFrame and return
-        return pd.DataFrame(classified_data)
+        # Convert classification results to DataFrame
+        classified_df = pd.DataFrame(classified_data)
+        classified_df.to_csv('/Users/alyazouzou/Desktop/CV_Football/FootCVision/phase3/classified.csv', index=False)
+
+        return classified_crops
+
 
 if __name__ == "__main__":
     # Load your tracking data
