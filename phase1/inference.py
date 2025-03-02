@@ -1,8 +1,9 @@
 from ultralytics import YOLO
-import numpy as np 
+import numpy as np
+import supervision as sv
 
 class PlayerInference:
-    def __init__(self, model_path="/Users/alyazouzou/Desktop/CV_Football/FootCVision2/phase1/runs/detect/train/weights/best.pt", conf_threshold=0.5, iou_threshold=0.5):
+    def __init__(self, model_path="/Users/alyazouzou/Desktop/CV_Football/FootCVision2/phase1/runs/detect/train/weights/best.pt", conf_threshold=0.3, iou_threshold=0.5):
         """
         Initialize the YOLO model for player detection.
         Args:
@@ -13,6 +14,38 @@ class PlayerInference:
         self.model = YOLO(model_path)  # Load the YOLO model
         self.conf_threshold = conf_threshold
         self.iou_threshold = iou_threshold
+
+    def inference(self, frame):
+        """
+        Perform player detection on a single frame.
+        Args:
+            frame (np.ndarray): Input frame for player detection.
+        Returns:
+            sv.Detections: Supervision detection object containing bounding boxes, confidence scores, and class IDs.
+        """
+        results = self.model(frame, conf=self.conf_threshold, iou=self.iou_threshold)
+
+        # Extract YOLO detections
+        detections = []
+        for result in results:
+            for box in result.boxes:
+                bbox = box.xyxy[0].cpu().numpy()  # Convert tensor to numpy array
+                confidence = float(box.conf[0].cpu().numpy())  # Convert tensor to float
+                class_id = int(box.cls[0].cpu().numpy())  # Convert tensor to int
+
+                detections.append({"bbox": bbox, "confidence": confidence, "class_id": class_id})
+
+        # Convert detections to Supervision format
+        if detections:
+            xyxy = np.array([det["bbox"] for det in detections])  # Bounding boxes
+            confidence = np.array([det["confidence"] for det in detections])  # Confidence scores
+            class_id = np.array([det["class_id"] for det in detections])  # Class IDs
+
+            supervision_detections = sv.Detections(xyxy=xyxy, confidence=confidence, class_id=class_id)
+            return supervision_detections
+        else:
+            return sv.Detections.empty()  # Return empty detections if none are found
+        
 
     def detect(self, image_path, save_output=True):
         """
