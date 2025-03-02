@@ -3,6 +3,13 @@ import numpy as np
 import torch
 from more_itertools import chunked
 import pandas as pd
+import sys
+import os
+
+# Get the absolute path of the parent directory (FootCVision)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from phase1.inference import PlayerInference
 import supervision as sv 
 from tqdm.auto import tqdm  
 from transformers import CLIPProcessor, CLIPModel
@@ -10,89 +17,63 @@ import umap.umap_ as umap
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 
+
 class kmeansclassifier:
-    def __init__(self, video_path, df_tracking):
+    def __init__(self, video_path, model_path, conf_threshold=0.8, iou_threshold=0.8):
+        """
+        Initialize the class for extracting player crops from a video using YOLO detection.
+
+        Args:
+            video_path (str): Path to the input video.
+            model_path (str): Path to the trained YOLO model weights.
+            conf_threshold (float): Confidence threshold for detections.
+            iou_threshold (float): IoU threshold for non-max suppression.
+        """
         self.video_path = video_path
-        self.df_tracking = df_tracking
+        self.detector = PlayerInference(model_path, conf_threshold, iou_threshold)  # Use PlayerInference
 
-    def get_crops_from_frames(self, target_frames):
+
+    def get_crops_from_frames(self, stride=30, player_id=2):
         """
-        Extract crops from multiple specified frames using tracking data.
-        
-        :param target_frames: List of frame numbers from which to extract crops.
-        :return: Dictionary {frame_number: list_of_crops} containing cropped player images.
+        Extract player crops from video frames using PlayerInference.
+
+        Args:
+            stride (int): Number of frames to skip between processed frames.
+            player_id (int): Class ID for players.
+
+        Returns:
+            List of cropped player images.
         """
-        cap = cv2.VideoCapture(self.video_path)
-        if not cap.isOpened():
-            print("Error: Could not open video.")
-            return {}
+        frame_generator = sv.get_video_frames_generator(
+            source_path=self.video_path, stride=stride)
 
-        all_crops = {}
+        crops = []
+        for frame in tqdm(frame_generator, desc="Extracting player crops"):
+            detections = self.detector.inference(frame)  # Use PlayerInference for detection
 
-        # Get video frame dimensions
-        ret, first_frame = cap.read()
-        if not ret:
-            print("Error: Could not read video.")
-            cap.release()
-            return {}
+            # Apply Non-Maximum Suppression (NMS) and filter only player detections
+            detections = detections.with_nms(threshold=0.5, class_agnostic=True)
+            players_detections = detections[detections.class_id == player_id]
+            
+            # Extract player crops
+            players_crops = [sv.crop_image(frame, xyxy) for xyxy in players_detections.xyxy]
+            crops += players_crops  # Add crops to the list
 
-        for frame_idx in tqdm(target_frames, desc="Extracting crops"):
-            frame_data = self.df_tracking[self.df_tracking["frame"] == frame_idx]
-            if frame_data.empty:
-                print(f"No tracking data found for frame {frame_idx}")
-                continue
-
-            # Set video to the target frame
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx - 1)
-            ret, frame = cap.read()
-            if not ret:
-                print(f"Error: Could not read frame {frame_idx}")
-                continue
-
-            crops = []
-            for _, row in frame_data.iterrows():
-                if row["class"] == "player":  # Only consider player crops
-                    x_center = row["x"]
-                    y_center = row["y"]
-                    box_width = row["w"]
-                    box_height = row["h"]
-
-                    # Calculate top-left and bottom-right coordinates of the bounding box
-                    x_min = int(x_center - box_width / 2)
-                    y_min = int(y_center - box_height / 2)
-                    x_max = int(x_center + box_width / 2)
-                    y_max = int(y_center + box_height / 2)
-
-                    # Ensure crop dimensions are valid
-                    if x_max > x_min and y_max > y_min:
-                        crop = frame[y_min:y_max, x_min:x_max]
-                        if crop.size > 0:  # Ensure crop is not empty
-                            crops.append(crop)
-
-            all_crops[frame_idx] = crops  # Store crops for the frame
-
-        cap.release()
-        return all_crops
+        return crops
 
 
-    def plot_crops(self, crops_dict):
+    def plot_crops(self, crops):
         """
-        Display all crops from multiple frames in a grid.
-        
-        :param crops_dict: Dictionary {frame_number: list_of_crops}
+        Display extracted player crops in a grid.
+
+        :param crops: List of cropped player images.
         """
-        all_crops = []  # List to store all crops
-
-        # Extract crops from all frames
-        for frame_idx, crops in crops_dict.items():
-            all_crops.extend(crops)  # Add crops from each frame to the list
-
-        if not all_crops:
+        if not crops:
             print("No crops to display.")
             return
 
         # Display all crops (up to 100) in a grid
-        sv.plot_images_grid(all_crops[:100], grid_size=(10, 10))
+        sv.plot_images_grid(crops[:100], grid_size=(10, 10))
 
     def get_features(self, crops):
         
@@ -118,8 +99,8 @@ class kmeansclassifier:
         return data
 
     def projection_umap(self, features):
-        projection = umap.UMAP(n_components=2).fit_transform(features)
-        clusters = KMeans(n_clusters=3).fit_predict(projection)
+        projection = umap.UMAP(n_components=3).fit_transform(features)
+        clusters = KMeans(n_clusters=2).fit_predict(projection)
         return projection, clusters
         
 
@@ -134,7 +115,7 @@ class kmeansclassifier:
         scatter = plt.scatter(projection[:, 0], projection[:, 1], c=clusters, cmap="viridis", alpha=0.7)
 
         # Add cluster centers
-        kmeans = KMeans(n_clusters=5)
+        kmeans = KMeans(n_clusters=2)
         kmeans.fit(projection)
         centers = kmeans.cluster_centers_
         plt.scatter(centers[:, 0], centers[:, 1], c='red', marker='x', s=200, label="Centroids")
@@ -150,20 +131,17 @@ class kmeansclassifier:
 if __name__ == "__main__":
 
     video_path = "/Users/alyazouzou/Desktop/CV_Football/vids/good.mov"
-    df_tracking = pd.read_csv("/Users/alyazouzou/Desktop/CV_Football/FootCVision/phase2/test.csv")
-    classifier = kmeansclassifier(video_path, df_tracking )
-    selected_frames = [ 5, 10, 20, 18, 30, 64, 36, 89]  
-    crops_dict = classifier.get_crops_from_frames(selected_frames)
+    classifier = kmeansclassifier(video_path, model_path="/Users/alyazouzou/Desktop/CV_Football/FootCVision/phase1/runs/detect/train/weights/best.pt") 
+    #selected_frames = [ 5, 10, 20, 18, 30, 64, 36, 89]  
+    #selected_frames = [3700]
+    crops = classifier.get_crops_from_frames(stride=300, player_id=2)
 
     #faire une montage  pour avoir les deuc gardiens et avoir 4 clusters 
     # Flatten all crops into a single list
-    all_crops = [crop for crops in crops_dict.values() for crop in crops]
+    #all_crops = [crop for crops in crops_dict.values() for crop in crops]
 
     # Extract CLIP features
-    features = classifier.get_features(all_crops)
-
-    # Extract features
-    features = classifier.get_features(all_crops)
+    features = classifier.get_features(crops)
 
     # Compute UMAP projection and clusters
     projection, clusters = classifier.projection_umap(features)
@@ -171,5 +149,5 @@ if __name__ == "__main__":
     # Plot UMAP projection with clusters
     classifier.plot_projection(projection, clusters)
     
-    if crops_dict:
-        classifier.plot_crops(crops_dict) 
+    if crops:
+        classifier.plot_crops(crops)
