@@ -47,6 +47,54 @@ class PlayerInference:
             return sv.Detections.empty()  # Return empty detections if none are found
         
 
+    def track(self, frame, persist=True, tracker="/Users/alyazouzou/Desktop/CV_Football/FootCVision/phase2/bytetrack.yaml"):
+        """
+        Perform player detection and tracking on a single frame.
+        
+        Args:
+            frame (np.ndarray): Input frame for player detection.
+            persist (bool): Whether to persist tracking across frames.
+
+        Returns:
+            sv.Detections: Supervision detection object containing bounding boxes, confidence scores, 
+                           class IDs, and tracker IDs.
+        """
+        # Run YOLO tracking (ByteTrack by default)
+        results = self.model.track(frame, conf=self.conf_threshold, iou=self.iou_threshold, persist=persist, tracker=tracker)
+
+        # Extract YOLO detections
+        detections = []
+        for result in results:
+            if result.boxes is None or len(result.boxes) == 0:
+                continue  # Skip frames with no detections
+            
+            for box in result.boxes:
+                bbox = box.xyxy[0].cpu().numpy()  # Bounding box coordinates
+                confidence = float(box.conf[0].cpu().numpy())  # Confidence score
+                class_id = int(box.cls[0].cpu().numpy())  # Object class
+                track_id = int(box.id[0].cpu().numpy()) if box.id is not None else -1  # Tracking ID
+
+                detections.append({
+                    "bbox": bbox,
+                    "confidence": confidence,
+                    "class_id": class_id,
+                    "track_id": track_id
+                })
+
+        # Convert detections to Supervision format
+        if detections:
+            xyxy = np.array([det["bbox"] for det in detections])  # Bounding boxes
+            confidence = np.array([det["confidence"] for det in detections])  # Confidence scores
+            class_id = np.array([det["class_id"] for det in detections])  # Class IDs
+            tracker_id = np.array([det["track_id"] for det in detections])  # Track IDs
+
+            supervision_detections = sv.Detections(
+                xyxy=xyxy, confidence=confidence, class_id=class_id, tracker_id=tracker_id
+            )
+            return supervision_detections
+        else:
+            return sv.Detections.empty()  # Return empty detections if none are found
+        
     def detect(self, image_path, save_output=True):
         """
         Perform player detection on a single image.
