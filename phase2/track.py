@@ -1,204 +1,182 @@
-import cv2
 import numpy as np
-import pandas as pd
-from collections import defaultdict
+import supervision as sv
+import sys
+import os
+import time
+# Get the absolute path of the parent directory (FootCVision)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from ultralytics import YOLO
-from scipy.interpolate import interp1d
-from scipy.interpolate import PchipInterpolator
-from scipy.interpolate import CubicSpline
+from tqdm import tqdm
+import cv2
+from phase1.inference import PlayerInference
+from phase3.kmeansclassifier import kmeansclassifier  # Assuming KMeans is used for team classification
 
-class PlayerTracker:
-    def __init__(self, video_path, model_path="/Users/alyazouzou/Desktop/CV_Football/FootCVision/phase1/runs/detect/train/weights/best.pt"):
+class Track:
+    def __init__(self, video_path, model_path="/Users/alyazouzou/Desktop/CV_Football/FootCVision/phase1/runs/detect/train/weights/best.pt", stride=30, conf_threshold=0.3, iou_threshold=0.5):
+        """
+        Handles player tracking, classification, and goalkeeper assignment.
+
+        Args:
+            video_path (str): Path to the input football match video.
+            model_path (str): Path to the trained YOLO model weights.
+            stride (int): Frame skipping interval for faster processing.
+            conf_threshold (float): Confidence threshold for YOLO detections.
+            iou_threshold (float): IoU threshold for non-max suppression.
+        """
         self.video_path = video_path
-        self.model = YOLO(model_path)
-        self.track_history = defaultdict(lambda: [])
-        self.ball_tracking_data = []
-        self.player_tracking_data = []
-        self.class_labels = {0: "ball", 1: "goalkeeper", 2: "player", 3: "referee"}
+        self.detector = PlayerInference(model_path, conf_threshold, iou_threshold)
+        self.kmeans_classifier = kmeansclassifier(video_path, n_clusters=2)  # Initialize KMeans classifier
+        self.tracker = sv.ByteTrack()  
+        self.tracker.reset()
 
-    def track(self):
+    def assign_goalkeeper_to_team(self, players: sv.Detections, goalkeepers: sv.Detections) -> np.ndarray:
         """
-        Track the players and the ball in the video and return a DataFrame with the tracking data.
+        Assigns goalkeepers to the closest team based on player positions.
+
         Args:
-            self : object
+            players (sv.Detections): Detected outfield players with known team assignments.
+            goalkeepers (sv.Detections): Detected goalkeepers without team assignments.
+
         Returns:
-            DataFrame: A DataFrame containing the tracking data.
+            np.ndarray: Assigned team IDs for goalkeepers.
         """
+        goalkeepers_xy = goalkeepers.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)
+        players_xy = players.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)
 
-        cap = cv2.VideoCapture(self.video_path)
-        frame_number = 0
+        # Ensure players.class_id is a NumPy array
+        player_classes = np.array(players.class_id).flatten()
 
-        while cap.isOpened():
-            success, frame = cap.read()
-            if not success:
-                break
+        # Ensure players exist before computing centroids
+        if len(players_xy) == 0 or len(goalkeepers_xy) == 0:
+            return np.zeros(len(goalkeepers_xy), dtype=int)  # Default all GKs to team 0
 
-            frame_number += 1
-            image_height, image_width, _ = frame.shape
+        # Filter team players correctly
+        team_0_players = players_xy[np.where(player_classes == 0)] if np.any(player_classes == 0) else np.empty((0, 2))
+        team_1_players = players_xy[np.where(player_classes == 1)] if np.any(player_classes == 1) else np.empty((0, 2))
 
-            results = self.model.track(frame, persist=True, tracker="bytetrack.yaml")
-            boxes = results[0].boxes.xywh.cpu()
-            track_ids = results[0].boxes.id.int().cpu().tolist()
-            classes = results[0].boxes.cls.int().cpu().tolist()
+        # Handle cases where a team has no detected players
+        if team_0_players.shape[0] == 0 or team_1_players.shape[0] == 0:
+            return np.zeros(len(goalkeepers_xy), dtype=int)  # Assign all GKs to one team if issue
 
-            for box, track_id, class_id in zip(boxes, track_ids, classes):
-                x, y, w, h = box
-                #x1, y1, x2, y2 = x / image_width, y / image_height, (x + w) / image_width, (y + h) / image_height
+        # Compute team centers using median for robustness
+        team_0_center = np.median(team_0_players, axis=0) if team_0_players.shape[0] > 0 else np.array([0, 0])
+        team_1_center = np.median(team_1_players, axis=0) if team_1_players.shape[0] > 0 else np.array([0, 0])
 
-                track = self.track_history[track_id]
-                #print(track)
-                track.append((float(x), float(y), float(w), float(h)))
+        gk_team_assignments = []
+        for gk_xy in goalkeepers_xy:
+            dist_0 = np.linalg.norm(gk_xy - team_0_center)
+            dist_1 = np.linalg.norm(gk_xy - team_1_center)
+            gk_team_assignments.append(0 if dist_0 < dist_1 else 1)
 
-                if len(track) > 30:
-                    track.pop(0)
+        return np.array(gk_team_assignments, dtype=int)
 
-                if class_id == 0:  # "ball" class
-                    self.ball_tracking_data.append({
-                        "frame": frame_number,
-                        "track_id": track_id,
-                        "class": "ball",
-                        "x": float(x),
-                        "y": float(y),
-                        "w": float(w),
-                        "h": float(h)
-                    })
-                elif class_id == 1:  # "player" class
-                    self.player_tracking_data.append({
-                        "frame": frame_number,
-                        "track_id": track_id,
-                        "class": "goalkeeper",
-                        "x": float(x),
-                        "y": float(y),
-                        "w": float(w),
-                        "h": float(h)
-                    })
-                elif class_id == 2:  # "player" class
-                    self.player_tracking_data.append({
-                        "frame": frame_number,
-                        "track_id": track_id,
-                        "class": "player",
-                        "x": float(x),
-                        "y": float(y),
-                        "w": float(w),
-                        "h": float(h)
-                    })
-
-        cap.release()
-
-        ball_df = pd.DataFrame(self.ball_tracking_data)
-        player_df = pd.DataFrame(self.player_tracking_data)
-        #ball_df.to_csv('ball.csv')
-        #player_df.to_csv('player.csv')
-
-        #ball_df_full = self._interpolate_and_fill(ball_df)
-        #player_df_full = self._interpolate_and_fill(player_df)
-        #ball_df_full.to_csv('ball_full.csv')
-        #player_df_full.to_csv('player_full.csv')   
-
-        final_df = pd.concat([ball_df, player_df])
-        final_df = final_df.sort_values(by=['frame', 'track_id']).reset_index(drop=True)
-        final_df['track_id'] = final_df['track_id'].astype(int)
-
-        return final_df
-
-
-
-    def _interpolate_and_fill(self, df):
+    def track_and_classify(self, save_video=True, output_path="output.mp4"):
         """
-        Interpolate missing values in the DataFrame and fill the remaining missing values.
-        Args:
-            df (DataFrame): The input DataFrame.
-        Returns:
-            DataFrame: The DataFrame with missing values interpolated and filled.
+        Tracks, classifies, and assigns players, goalkeepers, referees, and the ball.
+        Optionally saves the annotated frames as a video.
         """
-        if df.empty:
-            return df
+        frame_generator = sv.get_video_frames_generator(source_path=self.video_path, stride=30)
+        first_frame = next(frame_generator)
+        height, width, _ = first_frame.shape
 
-        min_frame = df['frame'].min()
-        max_frame = df['frame'].max()
-        all_frames = pd.DataFrame({'frame': range(min_frame, max_frame + 1)})
-        df_full = pd.merge(all_frames, df, on='frame', how='left')
+        # Set up video writer
+        if save_video:
+            fourcc = cv2.VideoWriter_fourcc(*"avc1") 
+            out = cv2.VideoWriter(output_path, fourcc, 30, (width, height))  # 30 FPS
 
-        for col in ['x', 'y', 'w', 'h']:
-            missing = df_full[col].isna()
-            df_training = df_full[~missing]
-            df_missing = df_full[missing].reset_index(drop=True)
+        # Step 1: Collect training crops from multiple frames BEFORE tracking
+        if not hasattr(self.kmeans_classifier, "trained") or not self.kmeans_classifier.trained:
+            print("🔄 Collecting training data for KMeans...")
+            training_crops = self.kmeans_classifier.get_crops_from_frames(stride=150, player_id=2) # Extract training crops
 
-            if not df_training.empty:
-                f = interp1d(df_training['frame'], df_training[col], fill_value="extrapolate")
-                df_full.loc[missing, col] = f(df_missing['frame'])
-
-        df_full['class'] = df_full['class'].ffill()
-        missing_track_id = df_full['track_id'].isna()
-
-        for idx in df_full[missing_track_id].index:
-            if idx == 0:
-                df_full.loc[idx, 'track_id'] = 1
+            if len(training_crops) > 0:
+                training_features = self.kmeans_classifier.get_features(training_crops)  # Extract features
+                self.kmeans_classifier.train_kmeans(training_features)  # Train KMeans
+                self.kmeans_classifier.trained = True  # Mark as trained
             else:
-                df_full.loc[idx, 'track_id'] = df_full.loc[idx - 1, 'track_id'] + 1
+                print("⚠️ No training data available for KMeans!")
 
-        return df_full
+        for frame in tqdm(frame_generator, desc="Processing frames"):
+            print('COUCOU')
+            detections = self.detector.inference(frame)
+            
+            print(detections)
+            # Extract and process detections
+            ball_detections = detections[detections.class_id == 0]
+            ball_detections.xyxy = sv.pad_boxes(xyxy=ball_detections.xyxy, px=10)
+            
+            detections.xyxy = sv.pad_boxes(detections.xyxy, px=10, py=10)
+            all_detections = detections[detections.class_id != 0]
+            all_detections = all_detections.with_nms(threshold=0.5, class_agnostic=True)
+            all_detections = self.tracker.update_with_detections(detections=all_detections)
+            
 
+            goalkeepers = all_detections[all_detections.class_id == 1]
+            players = all_detections[all_detections.class_id == 2]
+            #print("here players",players)
+            referees = all_detections[all_detections.class_id == 3]
 
+            # Extract CLIP embeddings for player crops
+            print(f"🧐 Detected {len(players)} players")
+            player_crops = [sv.crop_image(frame, xyxy) for xyxy in players.xyxy]
+            print(f"📸 Extracted {len(player_crops)} player crops for classification")
+            player_features = self.kmeans_classifier.get_features(player_crops)
 
-    
-    def plot_tracking(self, final_df):
-        """
-        Plot the tracking data on the video.
-        Args:
-            final_df (DataFrame): The DataFrame containing the tracking data.
-        """
-        cap = cv2.VideoCapture(self.video_path)
+            # Step 2: Classify players into two teams using KMeans
+            if len(player_features) > 0:
+                print(f"🧐 Players BEFORE KMeans: {len(players)}")
+                # Predict cluster labels (0 or 1) for players
+                predicted_classes = self.kmeans_classifier.predict_clusters(player_features)
 
-        # Get video properties
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                # Assign corrected class IDs (Shift by 2 so they don’t overlap with ball and goalkeeper)
+                players.class_id = np.array(predicted_classes).flatten() + 2  # Shift by 2
+                print(f"🎯 Players AFTER KMeans Classification: {len(players)}")
 
-        # Define the codec and create VideoWriter object
-        out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
+            # Assign goalkeepers to teams
+            goalkeepers.class_id = self.assign_goalkeeper_to_team(players, goalkeepers)
 
-        frame_number = 0
+            # Merge detections
+            all_detections = sv.Detections.merge([players, goalkeepers, referees])
+            annotated_frame = self.annotate_frame(frame, all_detections, ball_detections)
 
-        while cap.isOpened():
-            success, frame = cap.read()
-            if not success:
-                break
+            # Write to video file
+            if save_video==True:
+                out.write(annotated_frame)
+                #cv2.imshow('frame', annotated_frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
 
-            frame_number += 1
-
-            # Get the tracking data for the current frame
-            frame_data = final_df[final_df['frame'] == frame_number]
-
-            for _, row in frame_data.iterrows():
-                x_center = row['x'] 
-                y_center = row['y'] 
-                box_width = row['w'] 
-                box_height = row['h'] 
-                class_name = row['class']
-
-                # Calculate top-left and bottom-right coordinates of the bounding box
-                x_min = int(x_center - box_width / 2)
-                y_min = int(y_center - box_height / 2)
-                x_max = int(x_center + box_width / 2)
-                y_max = int(y_center + box_height / 2)
-
-                # Choose a color for the bounding box
-                color = (0, 255, 0) if class_name == "ball" else (255, 0, 0) if class_name == "goalkeeper" else (0, 0, 255)
-                # Draw the bounding box
-                cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), color, 2)
-                cv2.putText(frame, class_name, (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
-
-            # Write the frame to the output video
-            out.write(frame)
-
-        # Release everything
-        cap.release()
-        out.release()
+        if save_video:
+            out.release()
         cv2.destroyAllWindows()
 
-# Usage example
-#video_path = "/Users/alyazouzou/Desktop/CV_Football/vids/mcchelsea.mov"
-#tracker = PlayerTracker(video_path)
-#final_df = tracker.track()
-#print(final_df)
+    def annotate_frame(self, frame, all_detections, ball_detections):
+        """
+        Annotates the frame with player, goalkeeper, referee, and ball detections.
+
+        Args:
+            frame (np.ndarray): The current video frame.
+            all_detections (sv.Detections): Merged detections of players, goalkeepers, and referees.
+            ball_detections (sv.Detections): Detected ball positions.
+        """
+        labels = [f"#{tracker_id}" for tracker_id in all_detections.tracker_id]
+
+        ellipse_annotator = sv.EllipseAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493', '#FFD700']), thickness=2)
+        label_annotator = sv.LabelAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493', '#FFD700']),
+                                            text_color=sv.Color.from_hex('#000000'),
+                                            text_position=sv.Position.BOTTOM_CENTER)
+        triangle_annotator = sv.TriangleAnnotator(color=sv.Color.from_hex('#FFD700'), base=25, height=21, outline_thickness=1)
+
+        # Apply annotations
+        annotated_frame = frame.copy()
+        annotated_frame = ellipse_annotator.annotate(scene=annotated_frame, detections=all_detections)
+        annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=all_detections, labels=labels)
+        annotated_frame = triangle_annotator.annotate(scene=annotated_frame, detections=ball_detections)
+        return annotated_frame
+        
+
+if __name__ == "__main__":
+    video_path = "/Users/alyazouzou/Desktop/CV_Football/vids/good.mov"
+    tracker = Track(video_path)
+    tracker.track_and_classify(save_video=True, output_path="output.mp4")
+    
