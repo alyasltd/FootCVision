@@ -4,76 +4,75 @@ import pandas as pd
 import copy
 from tqdm.auto import tqdm 
 from typing import List
+import supervision as sv
+import sys
+import os
+
+# Get the absolute path of the parent directory (FootCVision)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from phase1.inference import PlayerInference
 
 class hsvclassifier:
-    def __init__(self, video_path, df_tracking):
-        self.video_path = video_path
-        self.df_tracking = df_tracking
+    def __init__(self, video_path, model_path="/Users/alyazouzou/Desktop/CV_Football/FootCVision/phase1/runs/detect/train/weights/best.pt", conf_threshold=0.8, iou_threshold=0.8):
+        """
+        Initialize the class for extracting player crops from a video using YOLO detection.
 
+        Args:
+            video_path (str): Path to the input video.
+            model_path (str): Path to the trained YOLO model weights.
+            conf_threshold (float): Confidence threshold for detections.
+            iou_threshold (float): IoU threshold for non-max suppression.
+        """
+        self.video_path = video_path
+        self.detector = PlayerInference(model_path, conf_threshold, iou_threshold)  # Use PlayerInference
         # Defined color ranges (lower and upper HSV bounds) for different teams
         self.color_ranges = {
             "man_united": [(17, 0, 138), (122, 113, 255)],
             "liverpool": [(18, 0, 136), (129, 116, 255)]
         }
     
-    def get_crops_from_frames(self, target_frames):
+    def get_crops_from_frames(self, stride=30, player_id=2):
         """
-        Extract crops from multiple specified frames using tracking data.
-        
-        :param target_frames: List of frame numbers from which to extract crops.
-        :return: Dictionary {frame_number: list_of_crops} containing cropped player images.
+        Extract player crops from video frames using PlayerInference.
+
+        Args:
+            stride (int): Number of frames to skip between processed frames.
+            player_id (int): Class ID for players.
+
+        Returns:
+            List of cropped player images.
         """
-        cap = cv2.VideoCapture(self.video_path)
-        if not cap.isOpened():
-            print("Error: Could not open video.")
-            return {}
+        frame_generator = sv.get_video_frames_generator(
+            source_path=self.video_path, stride=stride)
 
-        all_crops = {}
+        crops = []
+        for frame in tqdm(frame_generator, desc="Extracting player crops"):
+            detections = self.detector.inference(frame)  # Use PlayerInference for detection
 
-        # Get video frame dimensions
-        ret, first_frame = cap.read()
-        if not ret:
-            print("Error: Could not read video.")
-            cap.release()
-            return {}
+            # Apply Non-Maximum Suppression (NMS) and filter only player detections
+            detections = detections.with_nms(threshold=0.5, class_agnostic=True)
+            players_detections = detections[detections.class_id == player_id]
+            
+            # Extract player crops
+            players_crops = [sv.crop_image(frame, xyxy) for xyxy in players_detections.xyxy]
+            crops += players_crops  # Add crops to the list
 
-        for frame_idx in tqdm(target_frames, desc="Extracting crops"):
-            frame_data = self.df_tracking[self.df_tracking["frame"] == frame_idx]
-            if frame_data.empty:
-                print(f"No tracking data found for frame {frame_idx}")
-                continue
+        return crops
 
-            # Set video to the target frame
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx - 1)
-            ret, frame = cap.read()
-            if not ret:
-                print(f"Error: Could not read frame {frame_idx}")
-                continue
 
-            crops = []
-            for _, row in frame_data.iterrows():
-                if row["class"] == "player":  # Only consider player crops
-                    x_center = row["x"]
-                    y_center = row["y"]
-                    box_width = row["w"]
-                    box_height = row["h"]
+    def plot_crops(self, crops):
+        """
+        Display extracted player crops in a grid.
 
-                    # Calculate top-left and bottom-right coordinates of the bounding box
-                    x_min = int(x_center - box_width / 2)
-                    y_min = int(y_center - box_height / 2)
-                    x_max = int(x_center + box_width / 2)
-                    y_max = int(y_center + box_height / 2)
+        :param crops: List of cropped player images.
+        """
+        if not crops:
+            print("No crops to display.")
+            return
 
-                    # Ensure crop dimensions are valid
-                    if x_max > x_min and y_max > y_min:
-                        crop = frame[y_min:y_max, x_min:x_max]
-                        if crop.size > 0:  # Ensure crop is not empty
-                            crops.append(crop)
-
-            all_crops[frame_idx] = crops  # Store crops for the frame
-
-        cap.release()
-        return all_crops
+        # Display all crops (up to 100) in a grid
+        sv.plot_images_grid(crops[:100], grid_size=(10, 10))
 
     def get_hsv_img(self, img: np.ndarray) -> np.ndarray:
         """

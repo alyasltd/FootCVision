@@ -19,9 +19,9 @@ from sklearn.cluster import KMeans
 
 
 class kmeansclassifier:
-    def __init__(self, video_path, model_path, conf_threshold=0.8, iou_threshold=0.8):
+    def __init__(self, video_path, n_clusters=2, model_path="/Users/alyazouzou/Desktop/CV_Football/FootCVision/phase1/runs/detect/train/weights/best.pt", conf_threshold=0.8, iou_threshold=0.8):
         """
-        Initialize the class for extracting player crops from a video using YOLO detection.
+        Initialize the class for extracting player crops from a video using YOLO detection. TO RE DO 
 
         Args:
             video_path (str): Path to the input video.
@@ -31,6 +31,7 @@ class kmeansclassifier:
         """
         self.video_path = video_path
         self.detector = PlayerInference(model_path, conf_threshold, iou_threshold)  # Use PlayerInference
+        self.kmeans = KMeans(n_clusters=n_clusters, random_state=42)  # Ensures we always get consistent results
 
 
     def get_crops_from_frames(self, stride=30, player_id=2):
@@ -82,8 +83,16 @@ class kmeansclassifier:
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
         BATCH_SIZE = 32
+        print(f"ℹ️ Processing {len(crops)} crops...")
 
+        if len(crops) == 0:
+            print("⚠️ No valid crops to process! Returning empty features.")
+            return np.array([])  # Return an empty array to avoid crashes
+        
+        # Convert valid crops to PIL images
         crops = [sv.cv2_to_pillow(crop) for crop in crops]
+
+
         batches = chunked(crops, BATCH_SIZE)
 
         data = []
@@ -98,11 +107,44 @@ class kmeansclassifier:
         data = np.concatenate(data) if data else np.array([])
         return data
 
+    
+    def train_kmeans(self, features):
+        """
+        Trains the KMeans model on extracted features and saves centroids.
+
+        Args:
+            features (np.ndarray): The feature embeddings (N, 768).
+        """
+        if features.shape[0] == 0:
+            print("No features to train KMeans.")
+            return
+        self.kmeans.fit(features)
+        self.trained = True  # Mark as trained
+
+    def predict_clusters(self, features):
+        """
+        Predicts the cluster labels (team 0 or 1) based on extracted features.
+
+        Args:
+            features (np.ndarray): The feature embeddings (N, 768).
+
+        Returns:
+            np.ndarray: Cluster labels (N,) as 0 or 1.
+        """
+        return self.kmeans.predict(features)  # Outputs (N,)
+
     def projection_umap(self, features):
-        projection = umap.UMAP(n_components=3).fit_transform(features)
-        clusters = KMeans(n_clusters=2).fit_predict(projection)
-        return projection, clusters
-        
+        """
+        Projects the features to a 2D space using UMAP for visualization.
+
+        Args:
+            features (np.ndarray): The feature embeddings (N, 768).
+
+        Returns:
+            np.ndarray: UMAP projected 2D data.
+        """
+        return umap.UMAP(n_components=2).fit_transform(features)
+   
 
     def plot_projection(self, projection, clusters):
         """
@@ -128,26 +170,42 @@ class kmeansclassifier:
         plt.show()
 
 
-if __name__ == "__main__":
+    #evaluation model performance - clustering variance intra and inter
+    #evaluation model performance - silhouette score
+    #evaluation model performance - elbow method
 
-    video_path = "/Users/alyazouzou/Desktop/CV_Football/vids/good.mov"
-    classifier = kmeansclassifier(video_path, model_path="/Users/alyazouzou/Desktop/CV_Football/FootCVision/phase1/runs/detect/train/weights/best.pt") 
-    #selected_frames = [ 5, 10, 20, 18, 30, 64, 36, 89]  
-    #selected_frames = [3700]
-    crops = classifier.get_crops_from_frames(stride=300, player_id=2)
 
-    #faire une montage  pour avoir les deuc gardiens et avoir 4 clusters 
-    # Flatten all crops into a single list
-    #all_crops = [crop for crops in crops_dict.values() for crop in crops]
+#if __name__ == "__main__":
+
+    #video_path = "/Users/alyazouzou/Desktop/CV_Football/vids/good.mov"
+    #classifier = kmeansclassifier(video_path, model_path="/Users/alyazouzou/Desktop/CV_Football/FootCVision/phase1/runs/detect/train/weights/best.pt") 
+ 
+    #crops = classifier.get_crops_from_frames(stride=150, player_id=2)
 
     # Extract CLIP features
-    features = classifier.get_features(crops)
+    #features = classifier.get_features(crops)
 
     # Compute UMAP projection and clusters
-    projection, clusters = classifier.projection_umap(features)
+    #projection, clusters = classifier.projection_umap(features)
 
     # Plot UMAP projection with clusters
-    classifier.plot_projection(projection, clusters)
+    #classifier.plot_projection(projection, clusters)
+
+    # Extract CLIP features
+    #features = classifier.get_features(crops)
+
+    # Train KMeans on features
+    #classifier.train_kmeans(features)
+
+    # Predict cluster labels
+    #clusters = classifier.predict_clusters(features)
+
+    # Compute UMAP projection
+    #projection = classifier.projection_umap(features)
+
+    # Plot UMAP projection with clusters
+    #classifier.plot_projection(projection, clusters)
+
     
-    if crops:
-        classifier.plot_crops(crops)
+    #if crops:
+        #classifier.plot_crops(crops)
