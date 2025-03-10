@@ -5,7 +5,7 @@ from more_itertools import chunked
 import pandas as pd
 import sys
 import os
-
+from sklearn.metrics import silhouette_score
 # Get the absolute path of the parent directory (FootCVision)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -59,6 +59,7 @@ class kmeansclassifier:
             # Extract player crops
             players_crops = [sv.crop_image(frame, xyxy) for xyxy in players_detections.xyxy]
             crops += players_crops  # Add crops to the list
+            #print(f"ℹ️ Extracted {len(crops)} ")
 
         return crops
 
@@ -83,17 +84,25 @@ class kmeansclassifier:
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
         BATCH_SIZE = 32
-        print(f"ℹ️ Processing {len(crops)} crops...")
+        #print(crops)
+        #print(f"ℹ️ Processing {len(crops)} crops...")
 
         if len(crops) == 0:
             print("⚠️ No valid crops to process! Returning empty features.")
-            return np.array([])  # Return an empty array to avoid crashes
+            return np.array([])
+
+        valid_crops = [crop for crop in crops if isinstance(crop, np.ndarray) and crop.size > 0 and crop.shape[1] > 0]
         
-        # Convert valid crops to PIL images
-        crops = [sv.cv2_to_pillow(crop) for crop in crops]
+        if len(valid_crops) == 0:
+            print("⚠️ All crops were empty! Returning empty features.")
+            return np.array([])
 
+        #print(f"✅ Processing {len(valid_crops)} valid crops...")
 
-        batches = chunked(crops, BATCH_SIZE)
+        # ✅ Convert valid crops to PIL images
+        valid_crops = [sv.cv2_to_pillow(crop) for crop in valid_crops]
+
+        batches = chunked(valid_crops, BATCH_SIZE)
 
         data = []
         with torch.no_grad():  # Disable gradients for faster inference
@@ -118,6 +127,7 @@ class kmeansclassifier:
         if features.shape[0] == 0:
             print("No features to train KMeans.")
             return
+        
         self.kmeans.fit(features)
         self.trained = True  # Mark as trained
 
@@ -169,10 +179,61 @@ class kmeansclassifier:
         plt.legend()
         plt.show()
 
+    def evaluate(self):
+        """
+        Evaluate the performance of the KMeans model using various clustering metrics.
+        """
+        if not hasattr(self, 'kmeans') or not self.kmeans:
+            print("❌ KMeans model not trained yet. Train first before evaluation!")
+            return
+        
+        if self.kmeans.n_clusters < 2:
+            print("❌ Clustering evaluation requires at least 2 clusters!")
+            return
+        
+        # Extract features for evaluation
+        print("🔍 Extracting crops for evaluation...")
+        crops = self.get_crops_from_frames(stride=100, player_id=2)
+        features = self.get_features(crops)
 
-    #evaluation model performance - clustering variance intra and inter
-    #evaluation model performance - silhouette score
-    #evaluation model performance - elbow method
+        if features.shape[0] == 0:
+            print("⚠️ No valid features available for evaluation.")
+            return
+        
+        # Predict cluster labels
+        predicted_clusters = self.kmeans.predict(features)
+
+        print(f"📊 Evaluating KMeans with {self.kmeans.n_clusters} clusters")
+
+        ## 1️⃣ **Intra-cluster and Inter-cluster variance**
+        intra_variance = self.kmeans.inertia_  # Lower is better
+        inter_variance = np.var(self.kmeans.cluster_centers_)  # Higher is better
+
+        print(f"📏 Intra-cluster Variance: {intra_variance:.4f}")
+        print(f"📏 Inter-cluster Variance: {inter_variance:.4f}")
+
+        ## 2️⃣ **Silhouette Score**
+        silhouette_avg = silhouette_score(features, predicted_clusters)
+        print(f"🔹 Silhouette Score: {silhouette_avg:.4f} (Higher is better)")
+
+        ## 3️⃣ **Elbow Method (Finding Optimal Clusters)**
+        distortions = []
+        cluster_range = range(2, 10)  # Testing from 2 to 10 clusters
+
+        for k in cluster_range:
+            kmeans = KMeans(n_clusters=k, random_state=42)
+            kmeans.fit(features)
+            distortions.append(kmeans.inertia_)
+
+        plt.figure(figsize=(8, 5))
+        plt.plot(cluster_range, distortions, marker="o", linestyle="--")
+        plt.xlabel("Number of Clusters (K)")
+        plt.ylabel("Distortion (Inertia)")
+        plt.title("Elbow Method for Optimal K Selection")
+        plt.grid()
+        plt.show()
+
+        print("✅ Evaluation completed.")
 
 
 #if __name__ == "__main__":
@@ -185,27 +246,18 @@ class kmeansclassifier:
     # Extract CLIP features
     #features = classifier.get_features(crops)
 
-    # Compute UMAP projection and clusters
-    #projection, clusters = classifier.projection_umap(features)
-
-    # Plot UMAP projection with clusters
-    #classifier.plot_projection(projection, clusters)
-
-    # Extract CLIP features
-    #features = classifier.get_features(crops)
-
     # Train KMeans on features
     #classifier.train_kmeans(features)
 
-    # Predict cluster labels
+    #projection = classifier.projection_umap(features)  # Returns only one value
+
+    # Then use predicted clusters separately
     #clusters = classifier.predict_clusters(features)
 
-    # Compute UMAP projection
-    #projection = classifier.projection_umap(features)
-
-    # Plot UMAP projection with clusters
+    # Now plot using both values
     #classifier.plot_projection(projection, clusters)
 
+    #classifier.evaluate()
     
     #if crops:
         #classifier.plot_crops(crops)
