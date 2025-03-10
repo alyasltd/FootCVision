@@ -75,14 +75,18 @@ class Track:
         Tracks, classifies, and assigns players, goalkeepers, referees, and the ball.
         Optionally saves the annotated frames as a video.
         """
-        frame_generator = sv.get_video_frames_generator(source_path=self.video_path, stride=30)
+        frame_generator = sv.get_video_frames_generator(source_path=self.video_path, stride=1)
         first_frame = next(frame_generator)
         height, width, _ = first_frame.shape
+        cap = cv2.VideoCapture(self.video_path) 
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()  # Close video file
+
 
         # Set up video writer
         if save_video:
-            fourcc = cv2.VideoWriter_fourcc(*"avc1") 
-            out = cv2.VideoWriter(output_path, fourcc, 30, (width, height))  # 30 FPS
+            fourcc = cv2.VideoWriter_fourcc(*"avc1")  # H.264 codec
+            out = cv2.VideoWriter(output_path, fourcc, int(fps), (width, height))  # 30 FPS
 
         # Step 1: Collect training crops from multiple frames BEFORE tracking
         if not hasattr(self.kmeans_classifier, "trained") or not self.kmeans_classifier.trained:
@@ -97,10 +101,10 @@ class Track:
                 print("⚠️ No training data available for KMeans!")
 
         for frame in tqdm(frame_generator, desc="Processing frames"):
-            print('COUCOU')
+
             detections = self.detector.inference(frame)
             
-            print(detections)
+            #print(detections)
             # Extract and process detections
             ball_detections = detections[detections.class_id == 0]
             ball_detections.xyxy = sv.pad_boxes(xyxy=ball_detections.xyxy, px=10)
@@ -127,6 +131,14 @@ class Track:
                 print(f"🧐 Players BEFORE KMeans: {len(players)}")
                 # Predict cluster labels (0 or 1) for players
                 predicted_classes = self.kmeans_classifier.predict_clusters(player_features)
+
+                if len(predicted_classes) < len(players):
+                    print(f"⚠️ Mismatch: {len(players)} players but {len(predicted_classes)} predicted classes!")
+                    
+                    # Fill missing class IDs with -1 (or any default class)
+                    missing_count = len(players) - len(predicted_classes)
+                    predicted_classes = np.concatenate([predicted_classes, np.full(missing_count, -1)])
+
 
                 # Assign corrected class IDs (Shift by 2 so they don’t overlap with ball and goalkeeper)
                 players.class_id = np.array(predicted_classes).flatten() + 2  # Shift by 2
@@ -173,10 +185,24 @@ class Track:
         annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=all_detections, labels=labels)
         annotated_frame = triangle_annotator.annotate(scene=annotated_frame, detections=ball_detections)
         return annotated_frame
+    
+    def ball_possession(self, ball_detections, team_0_players, team_1_players):
+        """
+        Determines which team has possession of the ball based on the ball's position.
+
+        Args:
+            ball_detections (sv.Detections): Detected ball positions.
+            team_0_players (sv.Detections): Detected players from team 0.
+            team_1_players (sv.Detections): Detected players from team 1.
+
+        Returns:
+            int: Team ID (0 or 1) that has possession of the ball.
+        """
+        pass
         
 
 if __name__ == "__main__":
     video_path = "/Users/alyazouzou/Desktop/CV_Football/vids/good.mov"
     tracker = Track(video_path)
-    tracker.track_and_classify(save_video=True, output_path="output.mp4")
+    tracker.track_and_classify(save_video=True, output_path="normal.mp4")
     
