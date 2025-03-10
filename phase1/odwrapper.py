@@ -41,7 +41,7 @@ class YOLOAPIWrapper:
         
         return np.array(boxes)
 
-    def predict_and_match(self, image_path, y_trues_per_image, min_iou=0.1):
+    def predict_and_match(self, image_path, y_trues_per_image, min_iou=0.8):
         """
         Predict bounding boxes and match them with true bounding boxes using the Hungarian algorithm.
         Args:
