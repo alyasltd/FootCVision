@@ -154,7 +154,7 @@ class Track:
             # Write to video file
             if save_video==True:
                 out.write(annotated_frame)
-                #cv2.imshow('frame', annotated_frame)
+                cv2.imshow('frame', annotated_frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
@@ -184,6 +184,8 @@ class Track:
         annotated_frame = ellipse_annotator.annotate(scene=annotated_frame, detections=all_detections)
         annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=all_detections, labels=labels)
         annotated_frame = triangle_annotator.annotate(scene=annotated_frame, detections=ball_detections)
+        
+        sv.plot_image(annotated_frame)
         return annotated_frame
     
     def ball_possession(self, ball_detections, team_0_players, team_1_players):
@@ -204,5 +206,5 @@ class Track:
 if __name__ == "__main__":
     video_path = "/Users/alyazouzou/Desktop/CV_Football/vids/good.mov"
     tracker = Track(video_path)
-    tracker.track_and_classify(save_video=True, output_path="normal.mp4")
+    tracker.track_and_classify(save_video=False)
     
