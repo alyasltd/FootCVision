@@ -8,7 +8,7 @@ import os
 from sklearn.metrics import silhouette_score
 # Get the absolute path of the parent directory (FootCVision)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
+from mpl_toolkits.mplot3d import Axes3D
 from phase1.inference import PlayerInference
 import supervision as sv 
 from tqdm.auto import tqdm  
@@ -99,7 +99,7 @@ class kmeansclassifier:
 
         #print(f"✅ Processing {len(valid_crops)} valid crops...")
 
-        # ✅ Convert valid crops to PIL images
+        # Convert valid crops to PIL images
         valid_crops = [sv.cv2_to_pillow(crop) for crop in valid_crops]
 
         batches = chunked(valid_crops, BATCH_SIZE)
@@ -119,64 +119,141 @@ class kmeansclassifier:
     
     def train_kmeans(self, features):
         """
-        Trains the KMeans model on extracted features and saves centroids.
+        Entraîne le modèle KMeans avec les features extraites.
 
         Args:
-            features (np.ndarray): The feature embeddings (N, 768).
+            features (np.ndarray): Les features extraites des crops.
         """
         if features.shape[0] == 0:
-            print("No features to train KMeans.")
+            print("⚠️ Pas de features valides, impossible d'entraîner le KMeans.")
             return
         
-        self.kmeans.fit(features)
-        self.trained = True  # Mark as trained
+        print("🔄 Entraînement de KMeans...")
+        self.kmeans.fit(features)  # Utilise self.kmeans défini dans __init__
+        self.trained = True  # Marquer comme entraîné
+        print("✅ KMeans entraîné avec succès !")
 
     def predict_clusters(self, features):
         """
-        Predicts the cluster labels (team 0 or 1) based on extracted features.
+        Prédit les clusters après entraînement du KMeans.
 
         Args:
-            features (np.ndarray): The feature embeddings (N, 768).
+            features (np.ndarray): Les features des joueurs.
 
         Returns:
-            np.ndarray: Cluster labels (N,) as 0 or 1.
+            np.ndarray: Les labels de cluster (N,)
         """
-        return self.kmeans.predict(features)  # Outputs (N,)
+        if not hasattr(self, 'trained') or not self.trained:
+            print("❌ KMeans n'a pas été entraîné ! Exécute `train_kmeans(features)` en premier.")
+            return None
+        
+        return self.kmeans.predict(features)  # Utilise self.kmeans
 
-    def projection_umap(self, features):
+    
+    def projection_umap(self, features, n_components=2):
         """
-        Projects the features to a 2D space using UMAP for visualization.
+        Projects the features to a lower-dimensional space using UMAP.
 
         Args:
-            features (np.ndarray): The feature embeddings (N, 768).
+            features (np.ndarray): The feature embeddings (N, D).
+            n_components (int): Number of dimensions for UMAP (2D or 3D).
 
         Returns:
-            np.ndarray: UMAP projected 2D data.
+            np.ndarray: UMAP projected data.
         """
-        return umap.UMAP(n_components=2).fit_transform(features)
-   
+        if not isinstance(features, np.ndarray):
+            raise TypeError(f"Expected features to be a NumPy array, got {type(features)}")
 
+        self.features = features  # Store features
+        self.umap_model = umap.UMAP(n_components=n_components)  # ✅ Store UMAP model
+        projection = self.umap_model.fit_transform(features)  # Fit once
+        self.projection = projection  # Store the projection
+
+        return projection  # Return the transformed features
+
+    
     def plot_projection(self, projection, clusters):
         """
-        Plots the UMAP projection with clusters.
+        Plots the UMAP projection in 2D with clusters.
 
-        :param projection: 2D array of projected features (output from UMAP).
-        :param clusters: Cluster labels from KMeans.
+        Args:
+            projection (np.ndarray): 2D projected features.
+            clusters (np.ndarray): Cluster labels from KMeans.
         """
+        if projection.shape[1] != 2:
+            raise ValueError("Projection must be 2D for this function. Use n_components=2 in projection_umap().")
+
         plt.figure(figsize=(10, 7))
         scatter = plt.scatter(projection[:, 0], projection[:, 1], c=clusters, cmap="viridis", alpha=0.7)
 
-        # Add cluster centers
-        kmeans = KMeans(n_clusters=2)
-        kmeans.fit(projection)
-        centers = kmeans.cluster_centers_
-        plt.scatter(centers[:, 0], centers[:, 1], c='red', marker='x', s=200, label="Centroids")
+        if not hasattr(self, 'features'):
+            raise AttributeError("❌ `self.features` not found! Run `projection_umap()` first.")
+
+        # ✅ Use the stored UMAP model to transform centroids
+        projected_centers = self.umap_model.transform(self.kmeans.cluster_centers_)
+
+        # Plot cluster centers
+        plt.scatter(projected_centers[:, 0], projected_centers[:, 1], c='red', marker='x', s=200, label="Centroids")
 
         plt.colorbar(scatter, label="Cluster Label")
         plt.xlabel("UMAP Dimension 1")
         plt.ylabel("UMAP Dimension 2")
-        plt.title("UMAP Projection of Player Features")
+        plt.title("2D UMAP Projection of Player Features")
         plt.legend()
+        plt.show()
+
+
+    def plot_projection_3d(self, projection, clusters):
+        """
+        Plots the UMAP projection in 3D with clusters.
+
+        Args:
+            projection (np.ndarray): 3D projected features.
+            clusters (np.ndarray): Cluster labels from KMeans.
+        """
+        if projection.shape[1] != 3:
+            raise ValueError("Projection must be 3D for this function. Use n_components=3 in projection_umap().")
+
+        if not hasattr(self, 'umap_model'):
+            raise AttributeError("❌ UMAP model not found! Run `projection_umap()` first.")
+
+        # ✅ Transform centroids using stored UMAP model
+        projected_centers = self.umap_model.transform(self.kmeans.cluster_centers_)
+
+        # Compute intra-cluster variance
+        variance_intra = np.sum(np.linalg.norm(projection - projected_centers[clusters], axis=1) ** 2)
+        print("Variance intra-cluster:", variance_intra)
+
+
+        # Compute global centroid (mean of projected points)
+        global_centroid = np.mean(projection, axis=0)
+
+        # Compute number of samples per cluster
+        n_samples_per_cluster = np.bincount(self.kmeans.labels_)
+
+        # Compute inter-cluster variance
+        variance_inter = np.sum(n_samples_per_cluster * np.linalg.norm(projected_centers - global_centroid, axis=1) ** 2)
+        print("Variance inter-cluster:", variance_inter)
+
+        # Create 3D plot
+        fig = plt.figure(figsize=(10, 7))
+        ax = fig.add_subplot(111, projection='3d')
+
+        # Scatter plot of projected points
+        scatter = ax.scatter(projection[:, 0], projection[:, 1], projection[:, 2], 
+                            c=clusters, cmap="viridis", alpha=0.7)
+
+        # Plot transformed cluster centers
+        ax.scatter(projected_centers[:, 0], projected_centers[:, 1], projected_centers[:, 2], 
+                c='red', marker='x', s=200, label="Centroids")
+
+        # Labels and Title
+        ax.set_xlabel("UMAP Dimension 1")
+        ax.set_ylabel("UMAP Dimension 2")
+        ax.set_zlabel("UMAP Dimension 3")
+        ax.set_title("3D UMAP Projection of Player Features")
+        plt.legend()
+        plt.colorbar(scatter, label="Cluster Label")
         plt.show()
 
     def evaluate(self):
@@ -190,46 +267,54 @@ class kmeansclassifier:
         if self.kmeans.n_clusters < 2:
             print("❌ Clustering evaluation requires at least 2 clusters!")
             return
-        
-        # Extract features for evaluation
-        print("🔍 Extracting crops for evaluation...")
-        crops = self.get_crops_from_frames(stride=100, player_id=2)
-        features = self.get_features(crops)
 
-        if features.shape[0] == 0:
-            print("⚠️ No valid features available for evaluation.")
+        # Ensure features exist
+        if not hasattr(self, 'features'):
+            print("❌ Features not found! Run `projection_umap()` first.")
             return
-        
-        # Predict cluster labels
-        predicted_clusters = self.kmeans.predict(features)
 
         print(f"📊 Evaluating KMeans with {self.kmeans.n_clusters} clusters")
 
-        ## 1️⃣ **Intra-cluster and Inter-cluster variance**
-        intra_variance = self.kmeans.inertia_  # Lower is better
-        inter_variance = np.var(self.kmeans.cluster_centers_)  # Higher is better
+        # ✅ Transform centroids using stored UMAP model
+        projected_centers = self.umap_model.transform(self.kmeans.cluster_centers_)
+        # Predict clusters
+        predicted_clusters = self.kmeans.predict(self.features)
 
-        print(f"📏 Intra-cluster Variance: {intra_variance:.4f}")
-        print(f"📏 Inter-cluster Variance: {inter_variance:.4f}")
+        # Compute intra-cluster variance
+        variance_intra = np.sum(np.linalg.norm(self.projection - projected_centers[predicted_clusters], axis=1) ** 2)
+        print("Variance intra-cluster:", variance_intra)
+
+        # Compute global centroid (mean of projected points)
+        global_centroid = np.mean(self.projection, axis=0)
+
+        # Compute number of samples per cluster
+        n_samples_per_cluster = np.bincount(predicted_clusters)
+
+        # Compute inter-cluster variance
+        variance_inter = np.sum(n_samples_per_cluster * np.linalg.norm(projected_centers - global_centroid, axis=1) ** 2)
+        print("Variance inter-cluster:", variance_inter)
 
         ## 2️⃣ **Silhouette Score**
-        silhouette_avg = silhouette_score(features, predicted_clusters)
-        print(f"🔹 Silhouette Score: {silhouette_avg:.4f} (Higher is better)")
+        if self.kmeans.n_clusters > 1:
+            silhouette_avg = silhouette_score(self.features, predicted_clusters)
+            print(f"🔹 Silhouette Score: {silhouette_avg:.4f} (Higher is better)")
+        else:
+            print("⚠️ Silhouette Score requires at least 2 clusters.")
 
         ## 3️⃣ **Elbow Method (Finding Optimal Clusters)**
         distortions = []
-        cluster_range = range(2, 10)  # Testing from 2 to 10 clusters
+        cluster_range = range(1, 8)  # Testing from 1 to 8 clusters (adjustable)
 
         for k in cluster_range:
-            kmeans = KMeans(n_clusters=k, random_state=42)
-            kmeans.fit(features)
-            distortions.append(kmeans.inertia_)
+            temp_kmeans = KMeans(n_clusters=k, random_state=42)
+            temp_kmeans.fit(self.features)
+            distortions.append(temp_kmeans.inertia_)
 
         plt.figure(figsize=(8, 5))
         plt.plot(cluster_range, distortions, marker="o", linestyle="--")
         plt.xlabel("Number of Clusters (K)")
         plt.ylabel("Distortion (Inertia)")
-        plt.title("Elbow Method for Optimal K Selection")
+        plt.title("Elbow Method for Optimal K Selection (1 to 8)")
         plt.grid()
         plt.show()
 
