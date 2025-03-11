@@ -6,7 +6,6 @@ import pandas as pd
 import sys
 import os
 from sklearn.metrics import silhouette_score
-# Get the absolute path of the parent directory (FootCVision)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from mpl_toolkits.mplot3d import Axes3D
 from phase1.inference import PlayerInference
@@ -300,6 +299,9 @@ class kmeansclassifier:
             print(f"🔹 Silhouette Score: {silhouette_avg:.4f} (Higher is better)")
         else:
             print("⚠️ Silhouette Score requires at least 2 clusters.")
+
+        separation_ratio = variance_inter / variance_intra
+        print(f"📊 Ratio de Séparation: {separation_ratio:.2f}")
 
         ## 3️⃣ **Elbow Method (Finding Optimal Clusters)**
         distortions = []
