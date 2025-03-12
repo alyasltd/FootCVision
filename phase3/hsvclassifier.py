@@ -3,6 +3,7 @@ import numpy as np
 from typing import List, Tuple
 from tqdm.auto import tqdm
 import supervision as sv
+import matplotlib.pyplot as plt
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -22,8 +23,8 @@ class HSVClassifier:
         self.video_path = video_path
         self.detector = PlayerInference(model_path, conf_threshold, iou_threshold) 
         self.color_ranges = {
-            "manchester_united": [(0, 70, 50), (10, 255, 255)],  # Équipe 0 (ex: Manchester United)
-            "liverpool": [(0,0,168), (172,111,255)]   # Équipe 1 (ex: Liverpool)
+            "manchester_united": [(0, 70, 50), (10, 255, 255)],  # red
+            "liverpool": [(0, 0, 168), (172, 111, 255)]   # white
         }
 
     def get_crops_from_frames(self, stride=30, player_id=2) -> List[np.ndarray]:
@@ -198,15 +199,38 @@ class HSVClassifier:
         results = [(crop, self.predict_team(crop)) for crop in crops]
         return results
 
-    def display_results(self, results: List[Tuple[np.ndarray, int]]):
+
+    def plot_classified_crops(self, results):
         """
-        Affiche les résultats des classifications avec OpenCV.
+        Affiche les crops classifiés sous forme de grille organisée.
 
         Args:
-            results (List[Tuple[np.ndarray, int]]): Liste des crops et de leurs prédictions.
+            results (List[Tuple[np.ndarray, str]]): Liste des (crop, prédiction).
         """
+        # Trier les crops par équipe
+        team_crops = {"manchester_united": [], "liverpool": []}
+
         for crop, team_id in results:
-            label = f"Team {team_id}" if team_id != -1 else "Unknown"
-            cv2.imshow(label, crop)
-            cv2.waitKey(500)  # Pause pour voir chaque image
-        cv2.destroyAllWindows()
+            if team_id in team_crops:
+                labeled_crop = crop.copy()
+                team_crops[team_id].append(labeled_crop)
+
+
+        # Si aucune image n'est disponible, afficher un message
+        if not team_crops["manchester_united"] and not team_crops["liverpool"]:
+            print("No crops to display.")
+            return
+
+        # Définir le nombre max d'images à afficher
+        max_images = 100  # Limite pour éviter trop d'images
+
+        # 🔹 Affichage des crops pour chaque équipe avec labels
+        print("📌 Manchester United")
+        if team_crops["manchester_united"]:
+            images = sv.plot_images_grid(team_crops["manchester_united"][:max_images], grid_size=(10, 10))
+            cv2.putText(images, team_id.replace("_", " ").title(), (5, 15),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+
+        print("📌 Liverpool")
+        if team_crops["liverpool"]:
+            sv.plot_images_grid(team_crops["liverpool"][:max_images], grid_size=(10, 10))
