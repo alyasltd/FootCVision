@@ -145,6 +145,23 @@ class HSVClassifier:
         """
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         return cv2.countNonZero(gray)
+    
+    def count_team_pixels(self, img: np.ndarray, lower: Tuple[int, int, int], upper: Tuple[int, int, int]) -> int:
+        """
+        Compte le nombre de pixels qui correspondent à une plage de couleurs spécifique en HSV.
+
+        Args:
+            img (np.ndarray): Image filtrée.
+            lower (tuple): Seuil inférieur de couleur HSV.
+            upper (tuple): Seuil supérieur de couleur HSV.
+
+        Returns:
+            int: Nombre de pixels correspondant à la couleur définie par la plage.
+        """
+        hsv_img = self.convert_to_hsv(img)  # Convertir l'image en HSV
+        mask = self.apply_hsv_filter(hsv_img, lower, upper)  # Appliquer le filtre HSV
+        return cv2.countNonZero(mask)  # Compter les pixels correspondant à la couleur dans le masque (pixels de l'équipe)
+
 
     def crop_filter_and_blur_img(self, img: np.ndarray) -> np.ndarray:
         """
@@ -178,7 +195,12 @@ class HSVClassifier:
         best_team = -1  # Par défaut : inconnu
 
         for team_id, masked_img in color_masks:
-            pixels = self.count_non_black_pixels(masked_img)
+            # Obtenir les plages HSV pour chaque équipe
+            lower, upper = self.color_ranges[team_id]
+            
+            # Compter les pixels qui correspondent à la plage HSV de l'équipe
+            pixels = self.count_team_pixels(masked_img, lower, upper)
+            
             if pixels > max_pixels:
                 max_pixels = pixels
                 best_team = team_id
@@ -202,7 +224,7 @@ class HSVClassifier:
 
     def plot_classified_crops(self, results):
         """
-        Affiche les crops classifiés sous forme de grille organisée.
+        Affiche les crops classifiés sous forme de grille organisée avec un titre par équipe.
 
         Args:
             results (List[Tuple[np.ndarray, str]]): Liste des (crop, prédiction).
@@ -212,9 +234,7 @@ class HSVClassifier:
 
         for crop, team_id in results:
             if team_id in team_crops:
-                labeled_crop = crop.copy()
-                team_crops[team_id].append(labeled_crop)
-
+                team_crops[team_id].append(crop)
 
         # Si aucune image n'est disponible, afficher un message
         if not team_crops["manchester_united"] and not team_crops["liverpool"]:
@@ -224,13 +244,16 @@ class HSVClassifier:
         # Définir le nombre max d'images à afficher
         max_images = 100  # Limite pour éviter trop d'images
 
-        # 🔹 Affichage des crops pour chaque équipe avec labels
-        print("📌 Manchester United")
+        # 🔹 Affichage des crops pour Manchester United
         if team_crops["manchester_united"]:
-            images = sv.plot_images_grid(team_crops["manchester_united"][:max_images], grid_size=(10, 10))
-            cv2.putText(images, team_id.replace("_", " ").title(), (5, 15),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+            plt.figure(figsize=(8, 8))
+            plt.suptitle("Manchester United", fontsize=14, fontweight="bold")
+            sv.plot_images_grid(team_crops["manchester_united"][:max_images], grid_size=(10, 10))
+            plt.show()
 
-        print("📌 Liverpool")
+        # 🔹 Affichage des crops pour Liverpool
         if team_crops["liverpool"]:
+            plt.figure(figsize=(8, 8))
+            plt.suptitle("Liverpool", fontsize=14, fontweight="bold")
             sv.plot_images_grid(team_crops["liverpool"][:max_images], grid_size=(10, 10))
+            plt.show()
