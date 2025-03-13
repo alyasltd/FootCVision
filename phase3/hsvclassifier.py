@@ -23,8 +23,8 @@ class HSVClassifier:
         self.video_path = video_path
         self.detector = PlayerInference(model_path, conf_threshold, iou_threshold) 
         self.color_ranges = {
-            "manchester_united": [(0, 70, 50), (10, 255, 255)],  # red
-            "liverpool": [(0, 0, 168), (172, 111, 255)]   # white
+            "1": [(0, 70, 50), (10, 255, 255)],  # red manchester_united
+            "0": [(0, 0, 168), (172, 111, 255)]   # white liverpool
         }
 
     def get_crops_from_frames(self, stride=30, player_id=2) -> List[np.ndarray]:
@@ -230,7 +230,7 @@ class HSVClassifier:
             results (List[Tuple[np.ndarray, str]]): Liste des (crop, prédiction).
         """
         # Trier les crops par équipe
-        team_crops = {"manchester_united": [], "liverpool": []}
+        team_crops = {"1": [], "0": []}
 
         for crop, team_id in results:
             if team_id in team_crops:
@@ -245,14 +245,14 @@ class HSVClassifier:
         max_images = 100  # Limite pour éviter trop d'images
 
         # 🔹 Affichage des crops pour Manchester United
-        if team_crops["manchester_united"]:
+        if team_crops["1"]:
             plt.figure(figsize=(8, 8))
             plt.suptitle("Manchester United", fontsize=14, fontweight="bold")
             sv.plot_images_grid(team_crops["manchester_united"][:max_images], grid_size=(10, 10))
             plt.show()
 
         # 🔹 Affichage des crops pour Liverpool
-        if team_crops["liverpool"]:
+        if team_crops["0"]:
             plt.figure(figsize=(8, 8))
             plt.suptitle("Liverpool", fontsize=14, fontweight="bold")
             sv.plot_images_grid(team_crops["liverpool"][:max_images], grid_size=(10, 10))
