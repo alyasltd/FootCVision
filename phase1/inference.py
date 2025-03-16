@@ -11,7 +11,7 @@ class PlayerInference:
             conf_threshold (float): Confidence threshold for detections.
             iou_threshold (float): IoU threshold for non-max suppression.
         """
-        self.model = YOLO(model_path)  # Load the YOLO model
+        self.model = YOLO(model_path) 
         self.conf_threshold = conf_threshold
         self.iou_threshold = iou_threshold
 
@@ -25,26 +25,24 @@ class PlayerInference:
         """
         results = self.model(frame, conf=self.conf_threshold, iou=self.iou_threshold)
 
-        # Extract YOLO detections
         detections = []
         for result in results:
             for box in result.boxes:
-                bbox = box.xyxy[0].cpu().numpy()  # Convert tensor to numpy array
-                confidence = float(box.conf[0].cpu().numpy())  # Convert tensor to float
-                class_id = int(box.cls[0].cpu().numpy())  # Convert tensor to int
+                bbox = box.xyxy[0].cpu().numpy()  
+                confidence = float(box.conf[0].cpu().numpy()) 
+                class_id = int(box.cls[0].cpu().numpy())  
 
                 detections.append({"bbox": bbox, "confidence": confidence, "class_id": class_id})
 
-        # Convert detections to Supervision format
         if detections:
-            xyxy = np.array([det["bbox"] for det in detections])  # Bounding boxes
-            confidence = np.array([det["confidence"] for det in detections])  # Confidence scores
-            class_id = np.array([det["class_id"] for det in detections])  # Class IDs
+            xyxy = np.array([det["bbox"] for det in detections])
+            confidence = np.array([det["confidence"] for det in detections]) 
+            class_id = np.array([det["class_id"] for det in detections]) 
 
             supervision_detections = sv.Detections(xyxy=xyxy, confidence=confidence, class_id=class_id)
             return supervision_detections
         else:
-            return sv.Detections.empty()  # Return empty detections if none are found
+            return sv.Detections.empty() 
         
 
     def track(self, frame, persist=True, tracker="/Users/alyazouzou/Desktop/CV_Football/FootCVision/phase2/bytetrack.yaml"):
@@ -59,20 +57,18 @@ class PlayerInference:
             sv.Detections: Supervision detection object containing bounding boxes, confidence scores, 
                            class IDs, and tracker IDs.
         """
-        # Run YOLO tracking (ByteTrack by default)
         results = self.model.track(frame, conf=self.conf_threshold, iou=self.iou_threshold, persist=persist, tracker=tracker)
 
-        # Extract YOLO detections
         detections = []
         for result in results:
             if result.boxes is None or len(result.boxes) == 0:
-                continue  # Skip frames with no detections
+                continue 
             
             for box in result.boxes:
-                bbox = box.xyxy[0].cpu().numpy()  # Bounding box coordinates
-                confidence = float(box.conf[0].cpu().numpy())  # Confidence score
-                class_id = int(box.cls[0].cpu().numpy())  # Object class
-                track_id = int(box.id[0].cpu().numpy()) if box.id is not None else -1  # Tracking ID
+                bbox = box.xyxy[0].cpu().numpy()  
+                confidence = float(box.conf[0].cpu().numpy())  
+                class_id = int(box.cls[0].cpu().numpy()) 
+                track_id = int(box.id[0].cpu().numpy()) if box.id is not None else -1  
 
                 detections.append({
                     "bbox": bbox,
@@ -81,19 +77,18 @@ class PlayerInference:
                     "track_id": track_id
                 })
 
-        # Convert detections to Supervision format
         if detections:
-            xyxy = np.array([det["bbox"] for det in detections])  # Bounding boxes
-            confidence = np.array([det["confidence"] for det in detections])  # Confidence scores
-            class_id = np.array([det["class_id"] for det in detections])  # Class IDs
-            tracker_id = np.array([det["track_id"] for det in detections])  # Track IDs
+            xyxy = np.array([det["bbox"] for det in detections])  
+            confidence = np.array([det["confidence"] for det in detections])  
+            class_id = np.array([det["class_id"] for det in detections]) 
+            tracker_id = np.array([det["track_id"] for det in detections])  
 
             supervision_detections = sv.Detections(
                 xyxy=xyxy, confidence=confidence, class_id=class_id, tracker_id=tracker_id
             )
             return supervision_detections
         else:
-            return sv.Detections.empty()  # Return empty detections if none are found
+            return sv.Detections.empty() 
         
     def detect(self, image_path, save_output=True):
         """
@@ -106,7 +101,6 @@ class PlayerInference:
         """
         results = self.model(image_path, conf=self.conf_threshold, iou=self.iou_threshold)
 
-        # Process results
         detections = []
         for result in results:
             for box in result.boxes:
@@ -135,7 +129,7 @@ class PlayerInference:
         results = self.model(image_paths, conf=self.conf_threshold, iou=self.iou_threshold)
         all_boxes = []
         for result in results:
-            boxes = result.boxes.xyxy.cpu().numpy()  # Extract bounding boxes (x1, y1, x2, y2)
+            boxes = result.boxes.xyxy.cpu().numpy()  
             all_boxes.append(boxes)
         return all_boxes
 
@@ -173,7 +167,7 @@ class PlayerInference:
           np.ndarray: Padded array of bounding boxes with shape (max_boxes, 4).
       """
       padded = np.zeros((max_boxes, 4))  # Create a zero array for padding
-      padded[:len(boxes), :] = boxes    # Fill with actual bounding boxes
+      padded[:len(boxes), :] = boxes  # Copy the original boxes to the padded array
       return np.array(padded)
 
     def predict(self, image_paths):
@@ -184,7 +178,6 @@ class PlayerInference:
         Returns:
             np.ndarray: Padded bounding boxes for each image.
         """
-        # Batch inference using YOLO model
         results = self.model(image_paths, conf=self.conf_threshold, iou=self.iou_threshold)
         all_boxes = []
 
@@ -192,10 +185,7 @@ class PlayerInference:
             boxes = result.boxes.xyxy.cpu().numpy() if result.boxes.xyxy.size(0) > 0 else np.zeros((0, 4))
             all_boxes.append(boxes)
 
-        # Determine max number of boxes across all images
         max_boxes = max(len(boxes) for boxes in all_boxes)
-
-        # Pad all bounding boxes to the same length
         padded_boxes = [self.pad_bounding_boxes(boxes, max_boxes) for boxes in all_boxes]
 
         return np.array(padded_boxes)
