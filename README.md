@@ -19,34 +19,28 @@
 
 ### **Phase 2: Ball Tracking and Player Statistics** 🎥⚽
 
-1. **Ball Tracking** ⚽
-  <!-- Videos side by side using HTML -->
-<div align="center">
-  <video width="400" controls>
-    <source src="./utils/vid/gif_hsv.mp4" type="video/mp4">
-  </video>
-  <video width="400" controls>
-    <source src="./utils/vid/gif_kmeans.mp4" type="video/mp4">
-  </video>
-</div>
+1. **Ball & Player Tracking** ⚽
+A|B
+--|--
+![](https://example.com/a.gif)|![](https://example.com/b.gif)
 
 2. **Player Statistics** 📈
-   - Extract metrics for each team, such as:
-     - Distance covered.
-     - Ball possession time.
-     - Speed and acceleration.
 
 ---
 
 ### **Phase 3: Two Approaches for Team Differentiation** 📊
    - **HSV Classifier**:
-     - Extract **color histograms** from bounding box regions of detected players.
+     - Extract **HSV colors** from bounding box regions of detected players.
      - Cluster players into teams based on dominant uniform colors.
-     - **Objective**: Provide a visually interpretable method for distinguishing teams based on color features.
+<div align="center">
+  <img src="./utils/img/hsv_track_ex.png" alt="CP Image" width="60%" />
+</div>
 
    - **K-Means Clustering for Team Analysis**:
-     - Use player positions (bounding box coordinates) and spatial distributions to cluster players into two teams.
-     - **Objective**: Offer a complementary approach to visualizing teams, focusing on spatial and positional analysis.
+     - Use player positions (bounding box coordinates) and CLIP features to cluster players into two teams.
+<div align="center">
+  <img src="./utils/img/kmeans_track_ex.png" alt="CP Image" width="60%" />
+</div>       
 ---
 
 ### **Phase 4: Offside Detection** 🚩
