@@ -99,6 +99,9 @@ class TrackHSV:
             frame_count += 1  # Increment frame counter
 
             detections = self.detector.inference(frame)
+
+            ball_detections = detections[detections.class_id == 0]
+            ball_detections.xyxy = sv.pad_boxes(xyxy=ball_detections.xyxy, px=10)
             
             # Extract and track players
             detections.xyxy = sv.pad_boxes(detections.xyxy, px=10, py=10)
@@ -123,15 +126,15 @@ class TrackHSV:
     
                     valid_indices = [i for i, team in enumerate(predicted_classes) if team in team_mapping]
 
-                    # ✅ Only update detections that have a valid team
                     all_detections = all_detections[valid_indices]  # Remove unclassified players
                     predicted_classes_numeric = np.array([team_mapping[predicted_classes[i]] for i in valid_indices])
                     
                     all_detections.class_id = predicted_classes_numeric  # Update class IDs with numeric values
 
             # Annotate frame
-            annotated_frame = self.annotate_frame(frame, all_detections)
-            #sv.plot_image(annotated_frame)
+            annotated_frame = self.annotate_frame(frame, all_detections, ball_detections)
+            if frame_count==8:
+                sv.plot_image(annotated_frame)
 
             if save_video==True:
                 out.write(annotated_frame)
@@ -140,7 +143,7 @@ class TrackHSV:
             out.release()
         cv2.destroyAllWindows()
 
-    def annotate_frame(self, frame, all_detections):
+    def annotate_frame(self, frame, all_detections, ball_detections):
         """
         Annotates the frame with classified player detections.
 
@@ -148,16 +151,20 @@ class TrackHSV:
             frame (np.ndarray): The current video frame.
             all_detections (sv.Detections): Tracked player detections.
         """
-        labels = [f"Team {team_id}" for team_id in all_detections.class_id]
-
-
+        labels = [
+        f"ID {tracker_id} - Team {team_id}" 
+        for tracker_id, team_id in zip(all_detections.tracker_id, all_detections.class_id)]
         ellipse_annotator = sv.EllipseAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493']), thickness=2)
         label_annotator = sv.LabelAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493']),
                                             text_color=sv.Color.from_hex('#000000'),
                                             text_position=sv.Position.BOTTOM_CENTER)
+        triangle_annotator = sv.TriangleAnnotator(color=sv.Color.from_hex('#FFD700'), base=25, height=21, outline_thickness=1)
+
 
         annotated_frame = frame.copy()
         annotated_frame = ellipse_annotator.annotate(scene=annotated_frame, detections=all_detections)
         annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=all_detections, labels=labels)
+        annotated_frame = triangle_annotator.annotate(scene=annotated_frame, detections=ball_detections)
+        
         #sv.plot_image(annotated_frame)
         return annotated_frame 
