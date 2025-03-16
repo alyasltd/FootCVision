@@ -25,9 +25,48 @@ class TrackHSV:
         self.detector = PlayerInference(model_path, conf_threshold, iou_threshold)  # YOLO for detection
         self.tracker = sv.ByteTrack()
         self.tracker.reset()
-
-        # ✅ Initialize HSVClassifier as an object
         self.hsv_classifier = HSVClassifier(video_path, model_path, conf_threshold, iou_threshold)
+
+    def assign_goalkeeper_to_team(self, players: sv.Detections, goalkeepers: sv.Detections) -> np.ndarray:
+        """
+        Assigns goalkeepers to the closest team based on player positions.
+
+        Args:
+            players (sv.Detections): Detected outfield players with known team assignments.
+            goalkeepers (sv.Detections): Detected goalkeepers without team assignments.
+
+        Returns:
+            np.ndarray: Assigned team IDs for goalkeepers.
+        """
+        goalkeepers_xy = goalkeepers.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)
+        players_xy = players.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)
+
+        # Ensure players.class_id is a NumPy array
+        player_classes = np.array(players.class_id).flatten()
+
+        # Ensure players exist before computing centroids
+        if len(players_xy) == 0 or len(goalkeepers_xy) == 0:
+            return np.zeros(len(goalkeepers_xy), dtype=int)  # Default all GKs to team 0
+
+        # Filter team players correctly
+        team_0_players = players_xy[np.where(player_classes == 0)] if np.any(player_classes == 0) else np.empty((0, 2))
+        team_1_players = players_xy[np.where(player_classes == 1)] if np.any(player_classes == 1) else np.empty((0, 2))
+
+        # Handle cases where a team has no detected players
+        if team_0_players.shape[0] == 0 or team_1_players.shape[0] == 0:
+            return np.zeros(len(goalkeepers_xy), dtype=int)  # Assign all GKs to one team if issue
+
+        # Compute team centers using median for robustness
+        team_0_center = np.median(team_0_players, axis=0) if team_0_players.shape[0] > 0 else np.array([0, 0])
+        team_1_center = np.median(team_1_players, axis=0) if team_1_players.shape[0] > 0 else np.array([0, 0])
+
+        gk_team_assignments = []
+        for gk_xy in goalkeepers_xy:
+            dist_0 = np.linalg.norm(gk_xy - team_0_center)
+            dist_1 = np.linalg.norm(gk_xy - team_1_center)
+            gk_team_assignments.append(0 if dist_0 < dist_1 else 1)
+
+        return np.array(gk_team_assignments, dtype=int)
 
     def track_and_classify_hsv(self, save_video=True, output_path="output_hsv.mp4"):
         """
@@ -66,26 +105,36 @@ class TrackHSV:
             all_detections = detections[detections.class_id == 2]  # Only players
             all_detections = self.tracker.update_with_detections(detections=all_detections)
 
+
+            print(f"🔍 Tracked {len(all_detections)} players")
+            #print(f"🔍 Tracked {(all_detections)} players")
+
             # Extract crops and classify using HSVClassifier
             print(f"🧐 Detected {len(all_detections)} players")
             player_crops = [sv.crop_image(frame, xyxy) for xyxy in all_detections.xyxy]
             print(f"📸 Extracted {len(player_crops)} player crops for HSV classification")
 
             if player_crops:
-                predicted_classes = [self.hsv_classifier.predict_team(crop) for crop in player_crops]
-                
-                # ✅ Convert team names to numeric IDs
-                predicted_classes_numeric = np.array([team_mapping.get(team, -1) for team in predicted_classes])  
-                all_detections.class_id = predicted_classes_numeric
+                # ✅ Only process non-empty crops
+                valid_crops = [crop for crop in player_crops if crop is not None and crop.size > 0]
+
+                if valid_crops:
+                    predicted_classes = [self.hsv_classifier.predict_team(crop) for crop in player_crops]
+    
+                    valid_indices = [i for i, team in enumerate(predicted_classes) if team in team_mapping]
+
+                    # ✅ Only update detections that have a valid team
+                    all_detections = all_detections[valid_indices]  # Remove unclassified players
+                    predicted_classes_numeric = np.array([team_mapping[predicted_classes[i]] for i in valid_indices])
+                    
+                    all_detections.class_id = predicted_classes_numeric  # Update class IDs with numeric values
 
             # Annotate frame
             annotated_frame = self.annotate_frame(frame, all_detections)
+            #sv.plot_image(annotated_frame)
 
-            # ✅ Plot only the 8th frame
-            if frame_count == 8:
-                print("📸 Displaying Frame 8")
-                sv.plot_image(annotated_frame)
-                break  # Stop the loop after displaying the 8th frame
+            if save_video==True:
+                out.write(annotated_frame)
 
         if save_video:
             out.release()
@@ -101,6 +150,7 @@ class TrackHSV:
         """
         labels = [f"Team {team_id}" for team_id in all_detections.class_id]
 
+
         ellipse_annotator = sv.EllipseAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493']), thickness=2)
         label_annotator = sv.LabelAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493']),
                                             text_color=sv.Color.from_hex('#000000'),
@@ -109,5 +159,5 @@ class TrackHSV:
         annotated_frame = frame.copy()
         annotated_frame = ellipse_annotator.annotate(scene=annotated_frame, detections=all_detections)
         annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=all_detections, labels=labels)
-        sv.plot_image(annotated_frame)
-        return annotated_frame
+        #sv.plot_image(annotated_frame)
+        return annotated_frame 

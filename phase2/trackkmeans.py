@@ -25,7 +25,7 @@ class TrackKMeans:
         """
         self.video_path = video_path
         self.detector = PlayerInference(model_path, conf_threshold, iou_threshold)
-        self.kmeans_classifier = kmeansclassifier(video_path, n_clusters=2)  # Initialize KMeans classifier
+        self.kmeans_classifier = kmeansclassifier(self.video_path, n_clusters=2)  # Initialize KMeans classifier
         self.tracker = sv.ByteTrack()  
         self.tracker.reset()
 
@@ -83,30 +83,27 @@ class TrackKMeans:
         cap.release() 
 
 
-        # Set up video writer
         if save_video:
-            fourcc = cv2.VideoWriter_fourcc(*"avc1")  # H.264 codec
-            out = cv2.VideoWriter(output_path, fourcc, int(fps), (width, height))  # 30 FPS
+            fourcc = cv2.VideoWriter_fourcc(*"avc1")  
+            out = cv2.VideoWriter(output_path, fourcc, int(fps), (width, height))  
 
         # Step 1: Collect training crops from multiple frames BEFORE tracking
         if not hasattr(self.kmeans_classifier, "trained") or not self.kmeans_classifier.trained:
             print("🔄 Collecting training data for KMeans...")
-            training_crops = self.kmeans_classifier.get_crops_from_frames(stride=150, player_id=2) # Extract training crops
+            training_crops = self.kmeans_classifier.get_crops_from_frames(stride=150, player_id=2)
 
             if len(training_crops) > 0:
-                training_features = self.kmeans_classifier.get_features(training_crops)  # Extract features
-                self.kmeans_classifier.train_kmeans(training_features)  # Train KMeans
-                self.kmeans_classifier.trained = True  # Mark as trained
+                training_features = self.kmeans_classifier.get_features(training_crops)  
+                self.kmeans_classifier.train_kmeans(training_features) 
+                self.kmeans_classifier.trained = True  
             else:
                 print("⚠️ No training data available for KMeans!")
 
-        frame_count = 0  # Initialize frame counter
+        frame_count = 0  
         for frame in tqdm(frame_generator, desc="Processing frames"):
-            frame_count += 1  # Increment frame counter
+            frame_count += 1  
             detections = self.detector.inference(frame)
             
-            #print(detections)
-            # Extract and process detections
             ball_detections = detections[detections.class_id == 0]
             ball_detections.xyxy = sv.pad_boxes(xyxy=ball_detections.xyxy, px=10)
             
@@ -152,15 +149,15 @@ class TrackKMeans:
             all_detections = sv.Detections.merge([players, goalkeepers, referees])
             annotated_frame = self.annotate_frame(frame, all_detections, ball_detections)
             # ✅ Plot only the 8th frame
-            if frame_count == 8:
-                print("📸 Displaying Frame 8")
-                sv.plot_image(annotated_frame)
-                break 
+            #if frame_count == 8:
+            #    print("📸 Displaying Frame 8")
+            #    sv.plot_image(annotated_frame)
+            #    break 
 
             # Write to video file
             if save_video==True:
                 out.write(annotated_frame)
-                cv2.imshow('frame', annotated_frame)
+                #cv2.imshow('frame', annotated_frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
