@@ -5,17 +5,30 @@
 ### **Phase 1: Player Detection and Conformal Prediction** 🏃‍♂️⚽️
 
 1. **YOLOv11 Fine-Tuning for Player Detection** 🎯
-   - Adapt YOLOv11 for detecting football players on the field.
-   - **Objective**: Ensure robust detection of players, even under challenging scenarios like crowded scenes or varying lighting conditions.
+<!-- Center the image using HTML -->
+<div align="center">
+  <img src="./utils/img/infer.png" alt="Inference Image" width="60%" />
+</div>
 
 2. **Conformal Object Detection with puncc library** 📏
+<div align="center">
+  <img src="./utils/img/cp_close.png" alt="CP Image" width="60%" />
+</div>
  
 ---
 
 ### **Phase 2: Ball Tracking and Player Statistics** 🎥⚽
 
 1. **Ball Tracking** ⚽
-   - Implement tracking algorithms (e.g., **DeepSORT** or **ByteTrack**) to follow the ball's movement across frames.
+  <!-- Videos side by side using HTML -->
+<div align="center">
+  <video width="400" controls>
+    <source src="./utils/vid/gif_hsv.mp4" type="video/mp4">
+  </video>
+  <video width="400" controls>
+    <source src="./utils/vid/gif_kmeans.mp4" type="video/mp4">
+  </video>
+</div>
 
 2. **Player Statistics** 📈
    - Extract metrics for each team, such as:
