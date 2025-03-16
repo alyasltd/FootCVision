@@ -180,14 +180,13 @@ class HSVClassifier:
 
     def predict_team(self, img: np.ndarray) -> int:
         """
-        Détermine l'équipe du joueur en analysant les couleurs dominantes.
-
-        Args:
-            img (np.ndarray): Image du joueur.
-
-        Returns:
-            int: ID de l'équipe (0 ou 1).
+        Determines the player's team based on HSV color filtering.
         """
+        # ✅ Check if img is empty
+        if img is None or img.size == 0:
+            print("⚠️ Warning: Empty crop received in predict_team()")
+            return -1  # Return -1 for unknown class
+
         img = self.crop_filter_and_blur_img(img)  # Extraire la zone du maillot et flouter
         color_masks = self.extract_colored_regions(img)
 

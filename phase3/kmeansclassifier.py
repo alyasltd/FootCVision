@@ -31,7 +31,7 @@ class kmeansclassifier:
         self.video_path = video_path
         self.detector = PlayerInference(model_path, conf_threshold, iou_threshold)  # Use PlayerInference
         self.kmeans = KMeans(n_clusters=n_clusters, random_state=42)  # Ensures we always get consistent results
-
+        self.trained = False 
 
     def get_crops_from_frames(self, stride=30, player_id=2):
         """
@@ -57,8 +57,7 @@ class kmeansclassifier:
             
             # Extract player crops
             players_crops = [sv.crop_image(frame, xyxy) for xyxy in players_detections.xyxy]
-            crops += players_crops  # Add crops to the list
-            #print(f"ℹ️ Extracted {len(crops)} ")
+            crops += players_crops  
 
         return crops
 
@@ -73,7 +72,6 @@ class kmeansclassifier:
             print("No crops to display.")
             return
 
-        # Display all crops (up to 100) in a grid
         sv.plot_images_grid(crops[:100], grid_size=(10, 10))
 
     def get_features(self, crops):
@@ -83,8 +81,6 @@ class kmeansclassifier:
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
         BATCH_SIZE = 32
-        #print(crops)
-        #print(f"ℹ️ Processing {len(crops)} crops...")
 
         if len(crops) == 0:
             print("⚠️ No valid crops to process! Returning empty features.")
@@ -96,22 +92,19 @@ class kmeansclassifier:
             print("⚠️ All crops were empty! Returning empty features.")
             return np.array([])
 
-        #print(f"✅ Processing {len(valid_crops)} valid crops...")
-
         # Convert valid crops to PIL images
         valid_crops = [sv.cv2_to_pillow(crop) for crop in valid_crops]
 
         batches = chunked(valid_crops, BATCH_SIZE)
 
         data = []
-        with torch.no_grad():  # Disable gradients for faster inference
+        with torch.no_grad():  # Disable gradient tracking
             for batch in tqdm(batches, desc="Extracting embeddings"):
                 inputs = processor(images=batch, return_tensors="pt").to(device)
                 outputs = model.vision_model(**inputs)
                 embeddings = outputs.pooler_output.cpu().numpy()  # Extract image embeddings only
                 data.append(embeddings)
 
-        # Concatenate all embeddings
         data = np.concatenate(data) if data else np.array([])
         return data
 
@@ -146,7 +139,7 @@ class kmeansclassifier:
             print("❌ KMeans n'a pas été entraîné ! Exécute `train_kmeans(features)` en premier.")
             return None
         
-        return self.kmeans.predict(features)  # Utilise self.kmeans
+        return self.kmeans.predict(features)
 
     
     def projection_umap(self, features, n_components=2):
@@ -163,12 +156,12 @@ class kmeansclassifier:
         if not isinstance(features, np.ndarray):
             raise TypeError(f"Expected features to be a NumPy array, got {type(features)}")
 
-        self.features = features  # Store features
-        self.umap_model = umap.UMAP(n_components=n_components)  # ✅ Store UMAP model
-        projection = self.umap_model.fit_transform(features)  # Fit once
-        self.projection = projection  # Store the projection
+        self.features = features  
+        self.umap_model = umap.UMAP(n_components=n_components) 
+        projection = self.umap_model.fit_transform(features)  
+        self.projection = projection 
 
-        return projection  # Return the transformed features
+        return projection  
 
     
     def plot_projection(self, projection, clusters):
@@ -188,10 +181,8 @@ class kmeansclassifier:
         if not hasattr(self, 'features'):
             raise AttributeError("❌ `self.features` not found! Run `projection_umap()` first.")
 
-        # ✅ Use the stored UMAP model to transform centroids
         projected_centers = self.umap_model.transform(self.kmeans.cluster_centers_)
 
-        # Plot cluster centers
         plt.scatter(projected_centers[:, 0], projected_centers[:, 1], c='red', marker='x', s=200, label="Centroids")
 
         plt.colorbar(scatter, label="Cluster Label")
@@ -216,37 +207,25 @@ class kmeansclassifier:
         if not hasattr(self, 'umap_model'):
             raise AttributeError("❌ UMAP model not found! Run `projection_umap()` first.")
 
-        # ✅ Transform centroids using stored UMAP model
         projected_centers = self.umap_model.transform(self.kmeans.cluster_centers_)
-
-        # Compute intra-cluster variance
-        variance_intra = np.sum(np.linalg.norm(projection - projected_centers[clusters], axis=1) ** 2)
-        print("Variance intra-cluster:", variance_intra)
+        #variance_intra = np.sum(np.linalg.norm(projection - projected_centers[clusters], axis=1) ** 2)
+        #print("Variance intra-cluster:", variance_intra)
 
 
-        # Compute global centroid (mean of projected points)
         global_centroid = np.mean(projection, axis=0)
+        #n_samples_per_cluster = np.bincount(self.kmeans.labels_)
+        #variance_inter = np.sum(n_samples_per_cluster * np.linalg.norm(projected_centers - global_centroid, axis=1) ** 2)
+        #print("Variance inter-cluster:", variance_inter)
 
-        # Compute number of samples per cluster
-        n_samples_per_cluster = np.bincount(self.kmeans.labels_)
-
-        # Compute inter-cluster variance
-        variance_inter = np.sum(n_samples_per_cluster * np.linalg.norm(projected_centers - global_centroid, axis=1) ** 2)
-        print("Variance inter-cluster:", variance_inter)
-
-        # Create 3D plot
         fig = plt.figure(figsize=(10, 7))
         ax = fig.add_subplot(111, projection='3d')
 
-        # Scatter plot of projected points
         scatter = ax.scatter(projection[:, 0], projection[:, 1], projection[:, 2], 
                             c=clusters, cmap="viridis", alpha=0.7)
 
-        # Plot transformed cluster centers
         ax.scatter(projected_centers[:, 0], projected_centers[:, 1], projected_centers[:, 2], 
                 c='red', marker='x', s=200, label="Centroids")
 
-        # Labels and Title
         ax.set_xlabel("UMAP Dimension 1")
         ax.set_ylabel("UMAP Dimension 2")
         ax.set_zlabel("UMAP Dimension 3")
@@ -267,29 +246,20 @@ class kmeansclassifier:
             print("❌ Clustering evaluation requires at least 2 clusters!")
             return
 
-        # Ensure features exist
         if not hasattr(self, 'features'):
             print("❌ Features not found! Run `projection_umap()` first.")
             return
 
         print(f"📊 Evaluating KMeans with {self.kmeans.n_clusters} clusters")
 
-        # ✅ Transform centroids using stored UMAP model
         projected_centers = self.umap_model.transform(self.kmeans.cluster_centers_)
-        # Predict clusters
         predicted_clusters = self.kmeans.predict(self.features)
 
-        # Compute intra-cluster variance
         variance_intra = np.sum(np.linalg.norm(self.projection - projected_centers[predicted_clusters], axis=1) ** 2)
         print("Variance intra-cluster:", variance_intra)
 
-        # Compute global centroid (mean of projected points)
         global_centroid = np.mean(self.projection, axis=0)
-
-        # Compute number of samples per cluster
         n_samples_per_cluster = np.bincount(predicted_clusters)
-
-        # Compute inter-cluster variance
         variance_inter = np.sum(n_samples_per_cluster * np.linalg.norm(projected_centers - global_centroid, axis=1) ** 2)
         print("Variance inter-cluster:", variance_inter)
 
@@ -305,7 +275,7 @@ class kmeansclassifier:
 
         ## 3️⃣ **Elbow Method (Finding Optimal Clusters)**
         distortions = []
-        cluster_range = range(1, 8)  # Testing from 1 to 8 clusters (adjustable)
+        cluster_range = range(1, 8) 
 
         for k in cluster_range:
             temp_kmeans = KMeans(n_clusters=k, random_state=42)
