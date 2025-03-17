@@ -20,9 +20,9 @@
 ### **Phase 2: Ball Tracking and Player Statistics** 🎥⚽
 
 1. **Ball & Player Tracking** ⚽
-A|B
+HSV Classifier|Kmeans Classifier
 --|--
-![](https://example.com/a.gif)|![](https://example.com/b.gif)
+![](./utils/vid/output_hsv.gif)|![](./utils/vid/output_kmeans.gif)
 
 2. **Player Statistics** 📈
 
