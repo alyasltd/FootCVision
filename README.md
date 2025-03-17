@@ -25,7 +25,8 @@ The first video is ball & player tracking with HSV Classifier and the second is 
 <img src="./utils/vid/output_hsv.gif" width="600" /> 
 <img src="./utils/vid/output_kmeans.gif" width="600" />
 </div>
-3. **Player Statistics** 📈
+
+2. **Player Statistics** 📈
 
 ---
 
@@ -50,27 +51,13 @@ The first video is ball & player tracking with HSV Classifier and the second is 
    - Utilize player positions and ball location to detect offside scenarios.
    - Apply rule-based AI to automate offside decision-making.
 
-2. **Real-Time Offside Detection**
-   - Develop a pipeline for real-time offside detection during live matches.
-
-
----
-
-## **Tech Stack** 🛠️
-
-- **Object Detection**: YOLOv11 (PyTorch).
-- **Color Analysis**: OpenCV for histogram extraction.
-- **Clustering**: K-Means for spatial team analysis.
-- **Tracking**: DeepSORT or ByteTrack for ball tracking.
-- **Uncertainty Quantification**: Punch library for conformal prediction.
-
 ---
 
 ## **Installation and Usage** 🚀
 
 ### **Clone the Project**
 ```bash
-git clone https://github.com/alyasltd/FootCVision2.git
+git clone https://github.com/alyasltd/FootCVision.git
 ```
 
 ### **Install Dependencies**
