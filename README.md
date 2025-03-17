@@ -12,7 +12,7 @@
 
 2. **Conformal Object Detection with puncc library** 📏
 <div align="center">
-  <img src="./utils/img/cp_close.png" alt="CP Image" width="60%" />
+  <img src="./utils/img/cp_close.png" alt="CP Image" width="50%" />
 </div>
  
 ---
@@ -20,10 +20,12 @@
 ### **Phase 2: Ball Tracking and Player Statistics** 🎥⚽
 
 1. **Ball & Player Tracking** ⚽
-HSV Classifier | Kmeans Classifier
---- | ---
-<img src="./utils/vid/output_hsv.gif" width="600" /> | <img src="./utils/vid/output_kmeans.gif" width="600" />
-2. **Player Statistics** 📈
+The first video is ball & player tracking with HSV Classifier and the second is from the Kmeans classifier.
+<div align="center">
+<img src="./utils/vid/output_hsv.gif" width="600" /> 
+<img src="./utils/vid/output_kmeans.gif" width="600" />
+</div>
+3. **Player Statistics** 📈
 
 ---
 
