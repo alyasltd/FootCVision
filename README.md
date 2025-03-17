@@ -22,7 +22,7 @@
 1. **Ball & Player Tracking** ⚽
 HSV Classifier|Kmeans Classifier
 --|--
-![](./utils/vid/output_hsv.gif)|![](./utils/vid/output_kmeans.gif)
+<img src="./utils/vid/output_hsv.gif" width="600" />|<img src="./utils/vid/output_kmeans.gif" width="600" />
 
 2. **Player Statistics** 📈
 
