@@ -8,6 +8,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from ultralytics import YOLO
 from tqdm import tqdm
 import cv2
+from metrics import Metrics
 from phase1.inference import PlayerInference
 from phase3.kmeansclassifier import kmeansclassifier  # Assuming KMeans is used for team classification
 
@@ -80,6 +81,8 @@ class TrackKMeans:
         height, width, _ = first_frame.shape
         cap = cv2.VideoCapture(self.video_path) 
         fps = cap.get(cv2.CAP_PROP_FPS)
+        self.metrics = Metrics(fps=fps, possession_threshold=3, ball_distance_threshold=100)
+        self.metrics.current_team = 0  # Initialize possession to team 0
         cap.release() 
 
 
@@ -142,11 +145,17 @@ class TrackKMeans:
                 players.class_id = np.array(predicted_classes).flatten() + 2  # Shift by 2
                 #print(f"🎯 Players AFTER KMeans Classification: {len(players)}")
 
+            possession_team = self.metrics.update_ball_poss(players, ball_detections)
+
+            if possession_team is not None:
+                print(f"⚽ Ball Possession: Team {possession_team}")  # Debugging output    
             # Assign goalkeepers to teams
             goalkeepers.class_id = self.assign_goalkeeper_to_team(players, goalkeepers)
 
             # Merge detections
             all_detections = sv.Detections.merge([players, goalkeepers, referees])
+            
+
             annotated_frame = self.annotate_frame(frame, all_detections, ball_detections)
             # ✅ Plot only the 8th frame
             #if frame_count == 8:
@@ -176,8 +185,8 @@ class TrackKMeans:
         """
         labels = [f"#{tracker_id}" for tracker_id in all_detections.tracker_id]
 
-        ellipse_annotator = sv.EllipseAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493', '#FFD700']), thickness=2)
-        label_annotator = sv.LabelAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493', '#FFD700']),
+        ellipse_annotator = sv.EllipseAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493', '#FFD700', '#808080']), thickness=2) # il manque la couleur des arbitres
+        label_annotator = sv.LabelAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493', '#FFD700', '#808080']),
                                             text_color=sv.Color.from_hex('#000000'),
                                             text_position=sv.Position.BOTTOM_CENTER)
         triangle_annotator = sv.TriangleAnnotator(color=sv.Color.from_hex('#FFD700'), base=25, height=21, outline_thickness=1)
@@ -188,22 +197,18 @@ class TrackKMeans:
         annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=all_detections, labels=labels)
         annotated_frame = triangle_annotator.annotate(scene=annotated_frame, detections=ball_detections)
         
+        # ✅ Add Ball Possession Text Overlay
+        possession_team = self.metrics.current_team
+        possession_text = f"Ball Possession: Team {possession_team}" if possession_team is not None else "No Possession"
+
+        cv2.putText(
+            annotated_frame, possession_text, (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
+            1, (0, 255, 0), 2, cv2.LINE_AA  # Green text for visibility
+        )
+
         #sv.plot_image(annotated_frame)
         return annotated_frame
     
-    def ball_possession(self, ball_detections, team_0_players, team_1_players):
-        """
-        Determines which team has possession of the ball based on the ball's position.
-
-        Args:
-            ball_detections (sv.Detections): Detected ball positions.
-            team_0_players (sv.Detections): Detected players from team 0.
-            team_1_players (sv.Detections): Detected players from team 1.
-
-        Returns:
-            int: Team ID (0 or 1) that has possession of the ball.
-        """
-        pass
         
 
 #if __name__ == "__main__":

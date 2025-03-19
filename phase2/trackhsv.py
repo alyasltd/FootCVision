@@ -3,6 +3,7 @@ import cv2
 import supervision as sv
 from tqdm import tqdm
 import sys
+from metrics import Metrics
 import os
 # Get the absolute path of the parent directory (FootCVision)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -26,6 +27,7 @@ class TrackHSV:
         self.tracker = sv.ByteTrack()
         self.tracker.reset()
         self.hsv_classifier = HSVClassifier(video_path, model_path, conf_threshold, iou_threshold)
+        
 
     def assign_goalkeeper_to_team(self, players: sv.Detections, goalkeepers: sv.Detections) -> np.ndarray:
         """
@@ -81,6 +83,9 @@ class TrackHSV:
         height, width, _ = first_frame.shape
         cap = cv2.VideoCapture(self.video_path)
         fps = cap.get(cv2.CAP_PROP_FPS)
+        self.metrics = Metrics(fps=fps, possession_threshold=40, ball_distance_threshold=100)
+        self.metrics.current_team = 0  # Initialize possession to team 0
+        
         cap.release()
 
         if save_video:
@@ -105,17 +110,17 @@ class TrackHSV:
             
             # Extract and track players
             detections.xyxy = sv.pad_boxes(detections.xyxy, px=10, py=10)
-            all_detections = detections[detections.class_id == 2]  # Only players
+            all_detections = detections[detections.class_id == 2]  # Filter players only
             all_detections = self.tracker.update_with_detections(detections=all_detections)
 
-
-            print(f"🔍 Tracked {len(all_detections)} players")
+        
+            #print(f"🔍 Tracked {len(all_detections)} players")
             #print(f"🔍 Tracked {(all_detections)} players")
 
             # Extract crops and classify using HSVClassifier
-            print(f"🧐 Detected {len(all_detections)} players")
+            #print(f"🧐 Detected {len(all_detections)} players")
             player_crops = [sv.crop_image(frame, xyxy) for xyxy in all_detections.xyxy]
-            print(f"📸 Extracted {len(player_crops)} player crops for HSV classification")
+            #print(f"📸 Extracted {len(player_crops)} player crops for HSV classification")
 
             if player_crops:
                 # ✅ Only process non-empty crops
@@ -131,15 +136,22 @@ class TrackHSV:
                     
                     all_detections.class_id = predicted_classes_numeric  # Update class IDs with numeric values
 
+            possession_team = self.metrics.update_ball_poss(all_detections, ball_detections)
+
+            if possession_team is not None:
+                print(f"⚽ Ball Possession: Team {possession_team}")  # Debugging output
+
             # Annotate frame
             annotated_frame = self.annotate_frame(frame, all_detections, ball_detections)
+            sv.plot_image(annotated_frame)
+            
             if frame_count==8:
                 sv.plot_image(annotated_frame)
 
             if save_video==True:
                 out.write(annotated_frame)
 
-        if save_video:
+        if save_video == True:
             out.release()
         cv2.destroyAllWindows()
 
@@ -166,5 +178,14 @@ class TrackHSV:
         annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=all_detections, labels=labels)
         annotated_frame = triangle_annotator.annotate(scene=annotated_frame, detections=ball_detections)
         
+        # ✅ Add Ball Possession Text Overlay
+        possession_team = self.metrics.current_team
+        possession_text = f"Ball Possession: Team {possession_team}" if possession_team is not None else "No Possession"
+
+        cv2.putText(
+            annotated_frame, possession_text, (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
+            1, (0, 255, 0), 2, cv2.LINE_AA  # Green text for visibility
+        )
+
+        return annotated_frame
         #sv.plot_image(annotated_frame)
-        return annotated_frame 
