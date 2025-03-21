@@ -145,10 +145,10 @@ class TrackKMeans:
                 players.class_id = np.array(predicted_classes).flatten() + 2  # Shift by 2
                 #print(f"🎯 Players AFTER KMeans Classification: {len(players)}")
 
-            possession_team = self.metrics.update_ball_poss(players, ball_detections)
+            #possession_team = self.metrics.update_ball_poss(players, ball_detections)
 
-            if possession_team is not None:
-                print(f"⚽ Ball Possession: Team {possession_team}")  # Debugging output    
+            #if possession_team is not None:
+            #    print(f"⚽ Ball Possession: Team {possession_team}")  # Debugging output    
             # Assign goalkeepers to teams
             goalkeepers.class_id = self.assign_goalkeeper_to_team(players, goalkeepers)
 
@@ -158,10 +158,10 @@ class TrackKMeans:
 
             annotated_frame = self.annotate_frame(frame, all_detections, ball_detections)
             # ✅ Plot only the 8th frame
-            #if frame_count == 8:
-            #    print("📸 Displaying Frame 8")
-            #    sv.plot_image(annotated_frame)
-            #    break 
+            if frame_count == 8:
+                print("📸 Displaying Frame 8")
+                sv.plot_image(annotated_frame)
+                #break 
 
             # Write to video file
             if save_video==True:
@@ -175,39 +175,42 @@ class TrackKMeans:
         cv2.destroyAllWindows()
 
     def annotate_frame(self, frame, all_detections, ball_detections):
-        """
-        Annotates the frame with player, goalkeeper, referee, and ball detections.
-
-        Args:
-            frame (np.ndarray): The current video frame.
-            all_detections (sv.Detections): Merged detections of players, goalkeepers, and referees.
-            ball_detections (sv.Detections): Detected ball positions.
-        """
-        labels = [f"#{tracker_id}" for tracker_id in all_detections.tracker_id]
-
-        ellipse_annotator = sv.EllipseAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493', '#FFD700', '#808080']), thickness=2) # il manque la couleur des arbitres
-        label_annotator = sv.LabelAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493', '#FFD700', '#808080']),
-                                            text_color=sv.Color.from_hex('#000000'),
-                                            text_position=sv.Position.BOTTOM_CENTER)
-        triangle_annotator = sv.TriangleAnnotator(color=sv.Color.from_hex('#FFD700'), base=25, height=21, outline_thickness=1)
-
-        # Apply annotations
-        annotated_frame = frame.copy()
-        annotated_frame = ellipse_annotator.annotate(scene=annotated_frame, detections=all_detections)
-        annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=all_detections, labels=labels)
-        annotated_frame = triangle_annotator.annotate(scene=annotated_frame, detections=ball_detections)
-        
+         """
+         Annotates the frame with player, goalkeeper, referee, and ball detections.
+ 
+         Args:
+             frame (np.ndarray): The current video frame.
+             all_detections (sv.Detections): Merged detections of players, goalkeepers, and referees.
+             ball_detections (sv.Detections): Detected ball positions.
+         """
+         labels = [f"#{tracker_id}" for tracker_id in all_detections.tracker_id]
+ 
+         ellipse_annotator = sv.EllipseAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493', '#FFD700']), thickness=2)
+         label_annotator = sv.LabelAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493', '#FFD700']),
+                                             text_color=sv.Color.from_hex('#000000'),
+                                             text_position=sv.Position.BOTTOM_CENTER)
+         triangle_annotator = sv.TriangleAnnotator(color=sv.Color.from_hex('#FFD700'), base=25, height=21, outline_thickness=1)
+ 
+         # Apply annotations
+         annotated_frame = frame.copy()
+         annotated_frame = ellipse_annotator.annotate(scene=annotated_frame, detections=all_detections)
+         annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=all_detections, labels=labels)
+         annotated_frame = triangle_annotator.annotate(scene=annotated_frame, detections=ball_detections)
+ 
+         sv.plot_image(annotated_frame)
+         #sv.plot_image(annotated_frame)
+         return annotated_frame
         # ✅ Add Ball Possession Text Overlay
-        possession_team = self.metrics.current_team
-        possession_text = f"Ball Possession: Team {possession_team}" if possession_team is not None else "No Possession"
+        #possession_team = self.metrics.current_team
+        #possession_text = f"Ball Possession: Team {possession_team}" if possession_team is not None else "No Possession"
 
-        cv2.putText(
-            annotated_frame, possession_text, (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
-            1, (0, 255, 0), 2, cv2.LINE_AA  # Green text for visibility
-        )
+        #cv2.putText(
+        #    annotated_frame, possession_text, (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
+        #   1, (0, 255, 0), 2, cv2.LINE_AA  # Green text for visibility
+        #)
 
         #sv.plot_image(annotated_frame)
-        return annotated_frame
+        #return annotated_frame
     
         
 

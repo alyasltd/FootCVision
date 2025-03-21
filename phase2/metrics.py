@@ -19,65 +19,61 @@ class Metrics:
         self.possession_counter = 0  # Track how long a team has possession
         self.closest_player = None  # Player closest to the ball
 
+        # Suivi de la possession par équipe
+        self.team_possession = {}  # Dictionnaire pour stocker la possession par équipe
+        self.total_frames = 0  # Nombre total de frames analysées
+
+
     def update_ball_poss(self, players: sv.Detections, ball: sv.Detections):
-        """
-        Updates the ball possession based on player distances.
-
-        Args:
-            players (sv.Detections): Players detected in the frame.
-            ball (sv.Detections): Ball detected in the frame.
-        """
-        # 🚨 Debugging: Check if we detect anything
-        print(f"🔍 Detected {len(players)} players, {len(ball)} ball(s)")
-
+        self.total_frames += 1  # Incrémente le compteur de frames totales
+        
         if len(players) == 0 or len(ball) == 0:
-            print("⚠️ No players or ball detected. Skipping possession update.")
             self.closest_player = None
-            self.possession_counter = 0  # Reset possession if ball is missing
-            return None  # No possession change
-
-        # Extract coordinates
-        ball_xy = ball.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)[0]  # Get ball center
-        players_xy = players.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)  # Get player feet positions
-        player_ids = players.tracker_id  # Get player tracking IDs
-        player_teams = players.class_id  # Get player team assignments
-
-        if len(players_xy) == 0 or len(player_ids) == 0:
-            print("⚠️ No valid player detections found!")
-            return None  # No valid player detections
-
-        # Compute distances of all players to the ball
-        distances = np.linalg.norm(players_xy - ball_xy, axis=1)
-        closest_idx = np.argmin(distances)  # Get the index of the closest player
-
-        if distances[closest_idx] > self.ball_distance_threshold:
-            print(f"⚠️ Closest player is too far ({distances[closest_idx]:.2f}px). No possession assigned.")
-            self.closest_player = None  # No one has possession
-            self.possession_counter = 0  # Reset counter
+            self.possession_counter = 0
             return None
 
-        # Get closest player's info
-        closest_player_id = player_ids[closest_idx]
+        ball_xy = ball.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)[0]
+        players_xy = players.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)
+        player_ids = players.tracker_id
+        player_teams = players.class_id
+
+        if len(players_xy) == 0 or len(player_ids) == 0:
+            return None
+
+        distances = np.linalg.norm(players_xy - ball_xy, axis=1)
+        closest_idx = np.argmin(distances)
+
+        if distances[closest_idx] > self.ball_distance_threshold:
+            self.closest_player = None
+            self.possession_counter = 0
+            return None
+
         closest_team = player_teams[closest_idx]
 
-        print(f"✅ Closest player: ID {closest_player_id}, Team {closest_team}, Distance {distances[closest_idx]:.2f}px")
-
-        # Change possession only if held for consecutive frames
         if closest_team != self.current_team:
-            print(f"⚠️ Team changed! Resetting possession counter. New team: {closest_team}")
-            self.possession_counter = 0  # Reset counter when switching teams
+            self.possession_counter = 0
             self.current_team = closest_team
 
         self.possession_counter += 1
 
         if self.possession_counter >= self.possession_threshold:
-            print(f"🎯 Possession confirmed: Team {self.current_team}")
-            return self.current_team  # Confirmed possession
+            if closest_team not in self.team_possession:
+                self.team_possession[closest_team] = 0
+            self.team_possession[closest_team] += 1  # Incrémente le compteur de possession
+            return self.current_team
 
-        return None  # No change in possession yet
+        return None
 
-    def get_possession_status(self):
+    def get_possession_percentage(self):
         """
-        Returns possession status as a formatted string.
+        Retourne le pourcentage de possession de chaque équipe.
         """
-        return f"⚽ Ball Possession: Team {self.current_team}" if self.current_team is not None else "⚠️ No Possession"
+        if self.total_frames == 0:
+            return "Pas encore de données"
+
+        possession_percentages = {
+            team: (frames / self.total_frames) * 100
+            for team, frames in self.team_possession.items()
+        }
+
+        return possession_percentages
