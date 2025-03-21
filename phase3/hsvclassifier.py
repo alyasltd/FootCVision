@@ -236,7 +236,7 @@ class HSVClassifier:
                 team_crops[team_id].append(crop)
 
         # Si aucune image n'est disponible, afficher un message
-        if not team_crops["manchester_united"] and not team_crops["liverpool"]:
+        if not team_crops["1"] and not team_crops["0"]:
             print("No crops to display.")
             return
 
@@ -247,12 +247,12 @@ class HSVClassifier:
         if team_crops["1"]:
             plt.figure(figsize=(8, 8))
             plt.suptitle("Manchester United", fontsize=14, fontweight="bold")
-            sv.plot_images_grid(team_crops["manchester_united"][:max_images], grid_size=(10, 10))
+            sv.plot_images_grid(team_crops["1"][:max_images], grid_size=(10, 10))
             plt.show()
 
         # 🔹 Affichage des crops pour Liverpool
         if team_crops["0"]:
             plt.figure(figsize=(8, 8))
             plt.suptitle("Liverpool", fontsize=14, fontweight="bold")
-            sv.plot_images_grid(team_crops["liverpool"][:max_images], grid_size=(10, 10))
+            sv.plot_images_grid(team_crops["0"][:max_images], grid_size=(10, 10))
             plt.show()
