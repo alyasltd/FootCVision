@@ -15,20 +15,23 @@ class Metrics:
         self.fps = fps
         self.possession_threshold = possession_threshold
         self.ball_distance_threshold = ball_distance_threshold
-        self.current_team = None  # Track which team has possession
-        self.possession_counter = 0  # Track how long a team has possession
-        self.closest_player = None  # Player closest to the ball
+        self.current_team = None
+        self.possession_counter = 0
+        self.closest_player = None
+        self.current_player_id = None  # ✅ New: Track player ID with ball
 
-        # Suivi de la possession par équipe
-        self.team_possession = {}  # Dictionnaire pour stocker la possession par équipe
-        self.total_frames = 0  # Nombre total de frames analysées
-
+        self.team_possession = {}
+        self.total_frames = 0
 
     def update_ball_poss(self, players: sv.Detections, ball: sv.Detections):
-        self.total_frames += 1  # Incrémente le compteur de frames totales
-        
+        """"
+        Updates the ball possession based on the closest player to the ball.
+        """
+        self.total_frames += 1
+
         if len(players) == 0 or len(ball) == 0:
             self.closest_player = None
+            self.current_player_id = None
             self.possession_counter = 0
             return None
 
@@ -45,10 +48,12 @@ class Metrics:
 
         if distances[closest_idx] > self.ball_distance_threshold:
             self.closest_player = None
+            self.current_player_id = None
             self.possession_counter = 0
             return None
 
         closest_team = player_teams[closest_idx]
+        self.current_player_id = player_ids[closest_idx]  # ✅ Save player in possession
 
         if closest_team != self.current_team:
             self.possession_counter = 0
@@ -59,14 +64,14 @@ class Metrics:
         if self.possession_counter >= self.possession_threshold:
             if closest_team not in self.team_possession:
                 self.team_possession[closest_team] = 0
-            self.team_possession[closest_team] += 1  # Incrémente le compteur de possession
+            self.team_possession[closest_team] += 1
             return self.current_team
 
         return None
 
     def get_possession_percentage(self):
-        """
-        Retourne le pourcentage de possession de chaque équipe.
+        """"
+        Computes the possession percentage for each team.
         """
         if self.total_frames == 0:
             return "Pas encore de données"

@@ -8,7 +8,7 @@ import os
 # Get the absolute path of the parent directory (FootCVision)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from phase1.inference import PlayerInference
-from phase3.hsvclassifier import HSVClassifier  # Import the HSV classifier
+from phase2.hsvclassifier import HSVClassifier  # Import the HSV classifier
 
 class TrackHSV:
     def __init__(self, video_path, model_path="/Users/alyazouzou/Desktop/CV_Football/FootCVision/phase1/runs/detect/train/weights/best.pt", stride=30, conf_threshold=0.3, iou_threshold=0.5):
@@ -83,7 +83,7 @@ class TrackHSV:
         height, width, _ = first_frame.shape
         cap = cv2.VideoCapture(self.video_path)
         fps = cap.get(cv2.CAP_PROP_FPS)
-        self.metrics = Metrics(fps=fps, possession_threshold=40, ball_distance_threshold=100)
+        self.metrics = Metrics(fps=fps, possession_threshold=40, ball_distance_threshold=150)
         self.metrics.current_team = 0  # Initialize possession to team 0
         
         cap.release()
@@ -138,15 +138,26 @@ class TrackHSV:
 
             possession_team = self.metrics.update_ball_poss(all_detections, ball_detections)
 
-            if possession_team is not None:
-                print(f"⚽ Ball Possession: Team {possession_team}")  # Debugging output
+            #possession_player_id = self.metrics.current_player_id
+            #print(possession_player_id)
+            
+            #print("\n📍 Player Vectors:")
+            #for i in range(len(all_detections)):
+            #    tracker_id = all_detections.tracker_id[i]
+            #    class_id = all_detections.class_id[i]
+            #    bbox = all_detections.xyxy[i]
+            #    bottom_center = all_detections.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)[i]
+
+            #    print(f"🧍 Player ID {tracker_id} | Team {class_id} | BBox: {bbox} | Bottom-Center: {bottom_center}")
+
 
             # Annotate frame
             annotated_frame = self.annotate_frame(frame, all_detections, ball_detections)
-            sv.plot_image(annotated_frame)
+            #sv.plot_image(annotated_frame)
             
-            if frame_count==8:
-                sv.plot_image(annotated_frame)
+            #if frame_count==3:
+            #   break
+                #sv.plot_image(annotated_frame)
 
             if save_video==True:
                 out.write(annotated_frame)
@@ -163,6 +174,7 @@ class TrackHSV:
             frame (np.ndarray): The current video frame.
             all_detections (sv.Detections): Tracked player detections.
         """
+        possession_player_id = self.metrics.current_player_id
         labels = [
         f"ID {tracker_id} - Team {team_id}" 
         for tracker_id, team_id in zip(all_detections.tracker_id, all_detections.class_id)]
@@ -174,6 +186,11 @@ class TrackHSV:
 
 
         annotated_frame = frame.copy()
+        for i, tracker_id in enumerate(all_detections.tracker_id):
+            if tracker_id == possession_player_id:
+                foot_xy = all_detections.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)[i]
+                cv2.circle(annotated_frame, tuple(foot_xy.astype(int)), 15, (0, 255, 0), 3)  # Green circle
+                
         annotated_frame = ellipse_annotator.annotate(scene=annotated_frame, detections=all_detections)
         annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=all_detections, labels=labels)
         annotated_frame = triangle_annotator.annotate(scene=annotated_frame, detections=ball_detections)
@@ -186,6 +203,6 @@ class TrackHSV:
             annotated_frame, possession_text, (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
             1, (0, 255, 0), 2, cv2.LINE_AA  # Green text for visibility
         )
-
+        
         return annotated_frame
         #sv.plot_image(annotated_frame)
