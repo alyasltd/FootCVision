@@ -7,12 +7,12 @@
 1. **YOLOv11 Fine-Tuning for Player Detection** 🎯
 <!-- Center the image using HTML -->
 <div align="center">
-  <img src="./utils/img/infer.png" alt="Inference Image" width="60%" />
+  <img src="./utils/img/infer.png" alt="Inference Image" width="50%" />
 </div>
 
 2. **Conformal Object Detection with puncc library** 📏
 <div align="center">
-  <img src="./utils/img/cp_close.png" alt="CP Image" width="50%" />
+  <img src="./utils/img/cp_close.png" alt="CP Image" width="40%" />
 </div>
  
 ---
