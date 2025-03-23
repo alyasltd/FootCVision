@@ -156,22 +156,22 @@ class TrackKMeans:
             # Merge detections
             all_detections = sv.Detections.merge([players, goalkeepers, referees])
             
-            #possession_player_id = self.metrics.current_player_id
-            #print(possession_player_id)
+            possession_player_id = self.metrics.current_player_id
+            print(possession_player_id)
             
-            #print("\n📍 Player Vectors:")
-            #for i in range(len(all_detections)):
-            #    tracker_id = all_detections.tracker_id[i]
-            #    class_id = all_detections.class_id[i]
-            #    bbox = all_detections.xyxy[i]
-            #    bottom_center = all_detections.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)[i]
+            print("\n📍 Player Vectors:")
+            for i in range(len(all_detections)):
+                tracker_id = all_detections.tracker_id[i]
+                class_id = all_detections.class_id[i]
+                bbox = all_detections.xyxy[i]
+                bottom_center = all_detections.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)[i]
 
-            #    print(f"🧍 Player ID {tracker_id} | Team {class_id} | BBox: {bbox} | Bottom-Center: {bottom_center}")
+                print(f"🧍 Player ID {tracker_id} | Team {class_id} | BBox: {bbox} | Bottom-Center: {bottom_center}")
 
             # Annotate frame
             annotated_frame = self.annotate_frame(frame, all_detections, ball_detections)
-            #if frame_count == 3:
-            #    break 
+            if frame_count == 2:
+                break 
 
             # Write to video file
             if save_video==True:
@@ -194,8 +194,9 @@ class TrackKMeans:
              ball_detections (sv.Detections): Detected ball positions.
          """
         possession_player_id = self.metrics.current_player_id
-        labels = [f"#{tracker_id}" for tracker_id in all_detections.tracker_id]
- 
+        labels = [
+        f"ID {tracker_id} - Team {team_id}" 
+        for tracker_id, team_id in zip(all_detections.tracker_id, all_detections.class_id)]
         ellipse_annotator = sv.EllipseAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493', '#FFD700']), thickness=2)
         label_annotator = sv.LabelAnnotator(color=sv.ColorPalette.from_hex(['#00BFFF', '#FF1493', '#FFD700']),
                                              text_color=sv.Color.from_hex('#000000'),
@@ -224,7 +225,7 @@ class TrackKMeans:
            1, (0, 255, 0), 2, cv2.LINE_AA  # Green text for visibility
         )
 
-        #sv.plot_image(annotated_frame)
+        sv.plot_image(annotated_frame)
         return annotated_frame
     
         
