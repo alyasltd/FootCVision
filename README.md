@@ -17,7 +17,23 @@
  
 ---
 
-### **Phase 2: Ball Tracking and Player Statistics** 🎥⚽
+### **Phase 2: Two Approaches for Team Differentiation** 📊
+   - **HSV Classifier**:
+     - Extracted **HSV colors** from bounding box regions of detected players.
+     - Cluster players into teams based on dominant uniform colors.
+<div align="center">
+  <img src="./utils/img/hsv_track_ex.png" alt="CP Image" width="50%" />
+</div>
+
+   - **K-Means Clustering for Team Analysis**:
+     - Used player positions (bounding box coordinates) and CLIP features to cluster players into two teams.
+<div align="center">
+  <img src="./utils/img/kmeans_track_ex.png" alt="CP Image" width="50%" />
+</div>   
+
+---
+
+### **Phase 3: Ball Tracking and Player Statistics** 🎥⚽
 
 1. **Ball & Player Tracking** ⚽
 The first video is ball & player tracking with HSV Classifier and the second is from the Kmeans classifier.
@@ -27,29 +43,17 @@ The first video is ball & player tracking with HSV Classifier and the second is 
 </div>
 
 2. **Player Statistics** 📈
-
----
-
-### **Phase 3: Two Approaches for Team Differentiation** 📊
-   - **HSV Classifier**:
-     - Extract **HSV colors** from bounding box regions of detected players.
-     - Cluster players into teams based on dominant uniform colors.
+Implemented the Metrics Class allowing ball possesion, computed the percentage of possesion of each team and marked the player being in possesion.
 <div align="center">
-  <img src="./utils/img/hsv_track_ex.png" alt="CP Image" width="60%" />
+<img src="/utils/img/ball_poss.png" width="60%" />
 </div>
 
-   - **K-Means Clustering for Team Analysis**:
-     - Use player positions (bounding box coordinates) and CLIP features to cluster players into two teams.
-<div align="center">
-  <img src="./utils/img/kmeans_track_ex.png" alt="CP Image" width="60%" />
-</div>       
 
+---
 
 ### **Phase 4: Offside Detection** 🚩
 
 1. **Rule-Based Offside Detection**
-   - Utilize player positions and ball location to detect offside scenarios.
-   - Apply rule-based AI to automate offside decision-making.
 
 ---
 
