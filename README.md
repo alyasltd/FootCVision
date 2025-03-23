@@ -43,7 +43,7 @@ The first video is ball & player tracking with HSV Classifier and the second is 
 <div align="center">
   <img src="./utils/img/kmeans_track_ex.png" alt="CP Image" width="60%" />
 </div>       
----
+
 
 ### **Phase 4: Offside Detection** 🚩
 
