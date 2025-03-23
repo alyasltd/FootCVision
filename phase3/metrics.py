@@ -18,7 +18,7 @@ class Metrics:
         self.current_team = None
         self.possession_counter = 0
         self.closest_player = None
-        self.current_player_id = None  # ✅ New: Track player ID with ball
+        self.current_player_id = None  # Track player ID with ball
 
         self.team_possession = {}
         self.total_frames = 0
@@ -29,7 +29,7 @@ class Metrics:
         """
         self.total_frames += 1
 
-        if len(players) == 0 or len(ball) == 0:
+        if len(players) == 0 or len(ball) == 0: # Check for empty detections
             self.closest_player = None
             self.current_player_id = None
             self.possession_counter = 0
@@ -40,13 +40,13 @@ class Metrics:
         player_ids = players.tracker_id
         player_teams = players.class_id
 
-        if len(players_xy) == 0 or len(player_ids) == 0:
+        if len(players_xy) == 0 or len(player_ids) == 0: # Check for empty player detections
             return None
 
-        distances = np.linalg.norm(players_xy - ball_xy, axis=1)
+        distances = np.linalg.norm(players_xy - ball_xy, axis=1) # Compute distances to ball for all players
         closest_idx = np.argmin(distances)
 
-        if distances[closest_idx] > self.ball_distance_threshold:
+        if distances[closest_idx] > self.ball_distance_threshold: # Check if closest player is within threshold
             self.closest_player = None
             self.current_player_id = None
             self.possession_counter = 0
@@ -55,13 +55,13 @@ class Metrics:
         closest_team = player_teams[closest_idx]
         self.current_player_id = player_ids[closest_idx]  # ✅ Save player in possession
 
-        if closest_team != self.current_team:
+        if closest_team != self.current_team: # Check if possession changes
             self.possession_counter = 0
             self.current_team = closest_team
 
         self.possession_counter += 1
 
-        if self.possession_counter >= self.possession_threshold:
+        if self.possession_counter >= self.possession_threshold: # Check if possession threshold is reached
             if closest_team not in self.team_possession:
                 self.team_possession[closest_team] = 0
             self.team_possession[closest_team] += 1
